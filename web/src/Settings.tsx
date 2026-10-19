@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import { api, type MonitorsResponse, type ServerState, type Settings as S } from "./api";
 import Devices from "./Devices";
 import Help from "./Help";
+import PhoneSetup from "./PhoneSetup";
+import { unlockAudio, type AudioPref, type AudioStatus } from "./useAudio";
 
 const PRESETS: { name: string; hint: string; values: Pick<S, "fps" | "quality" | "scale"> }[] = [
   { name: "Data saver", hint: "Mobile data", values: { fps: 15, quality: 50, scale: 0.5 } },
@@ -15,9 +17,12 @@ interface Props {
   onSignOut: () => void;
   current?: S;
   server?: ServerState | null;
+  audio: AudioPref;
+  audioStatus: AudioStatus;
+  onAudio: (pref: AudioPref) => void;
 }
 
-export default function Settings({ onClose, onSignOut, current, server }: Props) {
+export default function Settings({ onClose, onSignOut, current, server, audio, audioStatus, onAudio }: Props) {
   const [info, setInfo] = useState<MonitorsResponse | null>(null);
   const [s, setS] = useState<S | null>(current ?? null);
   const [error, setError] = useState("");
@@ -80,8 +85,31 @@ export default function Settings({ onClose, onSignOut, current, server }: Props)
               Show mouse pointer
             </label>
             <p className="muted small">These settings apply to everyone watching and reset when the server restarts.</p>
+
+            <label>Sound</label>
+            <label className="check">
+              <input
+                type="checkbox" checked={audio.on} disabled={server?.audio?.enabled === false}
+                onChange={(e) => { if (e.target.checked) unlockAudio(); onAudio({ ...audio, on: e.target.checked }); }}
+              />
+              Hear this PC's sound on this phone
+            </label>
+            {audio.on && (
+              <label className="check">
+                <input type="checkbox" checked={audio.lowData} onChange={(e) => onAudio({ ...audio, lowData: e.target.checked })} />
+                Use less data (mono)
+              </label>
+            )}
+            <p className="muted small">
+              {server?.audio?.enabled === false
+                ? "Sound is switched off on the PC."
+                : audio.on && audioStatus === "tap"
+                  ? "Tap anywhere on the screen once to let your browser play sound."
+                  : "Off by default. Only this phone is affected. Needs about 1.5 Mbit/s (a quarter of that with less data)."}
+            </p>
           </>
         )}
+        <PhoneSetup />
         <Devices />
         {server?.update && (
           <p className="update-note">

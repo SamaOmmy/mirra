@@ -11,14 +11,17 @@ from flask import Flask, Response, abort, jsonify, make_response, redirect, requ
 from PIL import Image
 
 from . import __version__, updater
+from .audio import AudioError, AudioSource, to_low_data
 from .auth import COOKIE, Auth
 from .capture import FrameSource
 from .config import LIMITS, Config
+from .phonelink import MAX_FRAME, POLL_SECONDS, BadInput, PhoneHub, parse_input
 
 BOUNDARY = "frame"
 COOKIE_MAX_AGE = 30 * 24 * 3600
 WEB_DIR = Path(__file__).resolve().parent / "web"
-PUBLIC_ENDPOINTS = {"index", "static", "login"}
+PUBLIC_ENDPOINTS = {"index", "phone_page", "static", "login"}
+PHONE_APP = Path(__file__).resolve().parent / "phone_app" / "SamanthaPhone.apk"
 
 
 def _monitors():
@@ -57,9 +60,12 @@ def _parse_settings(data, monitor_count):
     return changes, None
 
 
-def create_app(cfg: Config) -> Flask:
+def create_app(cfg: Config, sound: AudioSource | None = None, phone: PhoneHub | None = None) -> Flask:
     app = Flask(__name__, static_folder=str(WEB_DIR), static_url_path="")
+    app.config["MAX_CONTENT_LENGTH"] = MAX_FRAME + 4096
+    phone = phone or PhoneHub()
     auth = Auth(cfg.token)
+    sound = sound or AudioSource(enabled=cfg.audio)
     source = FrameSource(cfg.monitor, cfg.fps, cfg.jpeg_quality, cfg.scale, cfg.cursor, cfg.capture)
 
     def client_ip():
@@ -117,6 +123,11 @@ def create_app(cfg: Config) -> Flask:
                             status=500, mimetype="text/plain")
         return send_from_directory(WEB_DIR, "index.html")
 
+    @app.get("/phone")
+    def phone_page():
+        """The page that shows and controls the phone: the same web app, which looks at the address."""
+        return index()
+
     @app.post("/api/login")
     def login():
         data = request.get_json(silent=True) or {}
@@ -137,7 +148,7 @@ def create_app(cfg: Config) -> Flask:
     def state():
         # Polled by the page: its frame counters show whether the stream is stuck.
         return jsonify(source.state() | {"settings": source.settings(), "version": __version__,
-                                                    "update": updater.cached_info()})
+                                                    "update": updater.cached_info(), "audio": sound.state()})
 
     @app.get("/api/monitors")
     def monitors():
@@ -203,5 +214,133 @@ def create_app(cfg: Config) -> Flask:
         resp = make_response(Response(generate(), mimetype=f"multipart/x-mixed-replace; boundary={BOUNDARY}"))
         resp.headers["X-Accel-Buffering"] = "no"
         return resp
+
+    @app.get("/api/audio")
+    def audio():
+        """The PC's sound as raw 16-bit PCM. Only phones that switched sound on in their settings ask for it."""
+        low = request.args.get("q") == "low"
+        if sound.listener_count() >= cfg.max_clients:
+            abort(503)
+        try:
+            rate, channels, generation = sound.add_listener()
+        except AudioError as exc:
+            return jsonify(error=str(exc)), 409
+        if low:
+            rate, out_channels = rate // 2, 1
+        else:
+            out_channels = channels
+
+        def silence(milliseconds):
+            return bytes(2 * out_channels * (rate * milliseconds // 1000))
+
+        def generate():
+            last, quiet = -1, 0
+            try:
+                yield silence(10)  # the response only starts once something is written: don't wait for the PC to make a sound
+                while True:
+                    items = sound.wait(last, generation)
+                    if items is None:
+                        return  # speakers changed or recording stopped: the page reconnects
+                    if not items:
+                        # Silence: send a few milliseconds of it now and then so a vanished phone is noticed.
+                        quiet += 1
+                        if quiet % 2 == 0:
+                            yield silence(20)
+                        continue
+                    quiet = 0
+                    for seq, pcm in items:
+                        last = seq
+                        yield to_low_data(pcm, channels) if low else pcm
+            finally:
+                sound.remove_listener()
+
+        resp = Response(generate(), mimetype="application/octet-stream")
+        resp.headers["X-Audio-Rate"] = str(rate)
+        resp.headers["X-Audio-Channels"] = str(out_channels)
+        resp.headers["X-Accel-Buffering"] = "no"
+        return resp
+
+    # -- Android phone: companion app <-> relay <-> this PC's page -------------------------------
+    @app.get("/api/phone/state")
+    def phone_state():
+        return jsonify(phone.state() | {"app_available": PHONE_APP.exists()})
+
+    @app.get("/api/phone/pair")
+    def phone_pair():
+        """What the phone app needs to link up with this PC. Sent only to a device that already has the token."""
+        return jsonify(token=cfg.token)
+
+    @app.get("/api/phone/app.apk")
+    def phone_app():
+        if not PHONE_APP.exists():
+            return jsonify(error="This copy of Samantha does not include the Android app."), 404
+        return send_from_directory(PHONE_APP.parent, PHONE_APP.name, as_attachment=True,
+                                   mimetype="application/vnd.android.package-archive")
+
+    @app.post("/api/phone/hello")
+    def phone_hello():
+        data = request.get_json(silent=True)
+        if not isinstance(data, dict):
+            return jsonify(error="expected a JSON object"), 400
+        info = {"device": str(data.get("device", ""))[:80], "version": str(data.get("version", ""))[:20],
+                "control": data.get("control") is not False}
+        for key in ("width", "height"):
+            if type(data.get(key)) is int and 0 < data[key] < 20000:
+                info[key] = data[key]
+        phone.hello(info)
+        return jsonify(ok=True, poll=POLL_SECONDS)
+
+    @app.get("/api/phone/commands")
+    def phone_commands():
+        return jsonify(phone.next_commands())
+
+    @app.post("/api/phone/frame")
+    def phone_frame():
+        jpeg = request.get_data()
+        if not jpeg.startswith(b"\xff\xd8"):
+            return jsonify(error="expected a JPEG"), 400
+        width, height = request.headers.get("X-Width", type=int, default=0), request.headers.get("X-Height", type=int, default=0)
+        phone.push_frame(jpeg, width, height)
+        return jsonify(ok=True)
+
+    @app.get("/api/phone/stream")
+    def phone_stream():
+        if phone.state()["watchers"] >= cfg.max_clients:
+            abort(503)
+        phone.add_watcher()
+
+        def generate():
+            last, idle = -1, 0
+            try:
+                while True:
+                    item = phone.wait_frame(last)
+                    if item is None:
+                        idle += 1
+                        if idle % 8 or last < 0:     # now and then repeat the picture so a vanished page is noticed
+                            continue
+                        item = phone.wait_frame(-1, timeout=0)
+                        if item is None:
+                            continue
+                    else:
+                        idle = 0
+                    last, jpeg = item
+                    yield (b"--" + BOUNDARY.encode() + b"\r\nContent-Type: image/jpeg\r\nContent-Length: "
+                           + str(len(jpeg)).encode() + b"\r\n\r\n" + jpeg + b"\r\n")
+            finally:
+                phone.remove_watcher()
+
+        resp = make_response(Response(generate(), mimetype=f"multipart/x-mixed-replace; boundary={BOUNDARY}"))
+        resp.headers["X-Accel-Buffering"] = "no"
+        return resp
+
+    @app.post("/api/phone/input")
+    def phone_input():
+        try:
+            event = parse_input(request.get_json(silent=True))
+        except BadInput as exc:
+            return jsonify(error=str(exc)), 400
+        if not phone.send_input(event):
+            return jsonify(error="The phone is not connected, or it does not allow control."), 409
+        return jsonify(ok=True)
 
     return app

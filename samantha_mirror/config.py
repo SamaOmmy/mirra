@@ -85,6 +85,7 @@ class Config:
     loopback: bool
     capture: str
     update_check: bool
+    audio: bool
 
 
 # Valid ranges for settings that can also be changed live from the web app.
@@ -140,4 +141,5 @@ def load() -> Config:
         loopback=_flag("SM_LOOPBACK", False),
         capture=_choice("SM_CAPTURE", "auto", ("auto", "dxgi", "mss")),
         update_check=_flag("SM_UPDATE_CHECK", True),
+        audio=_flag("SM_AUDIO", True),
     )

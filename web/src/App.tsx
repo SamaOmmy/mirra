@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { api, Unauthorized } from "./api";
 import Login from "./Login";
+import PhoneViewer from "./PhoneViewer";
 import Viewer from "./Viewer";
 
 type Auth = "checking" | "in" | "out";
@@ -21,5 +22,6 @@ export default function App() {
 
   if (auth === "checking") return <div className="center muted">Loading…</div>;
   if (auth === "out") return <Login onDone={() => setAuth("in")} />;
+  if (location.pathname === "/phone") return <PhoneViewer onSignedOut={() => setAuth("out")} />;
   return <Viewer onSignedOut={() => setAuth("out")} />;
 }

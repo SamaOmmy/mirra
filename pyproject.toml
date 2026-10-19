@@ -18,6 +18,7 @@ dependencies = [
   "qrcode>=7.4",
   "numpy>=1.26",
   "dxcam>=0.3; sys_platform == 'win32'",
+  "pyaudiowpatch>=0.2.12; sys_platform == 'win32'",
   "opencv-python-headless>=4.8",
 ]
 
@@ -31,7 +32,7 @@ samantha-mirror = "samantha_mirror.cli:main"
 packages = ["samantha_mirror"]
 
 [tool.setuptools.package-data]
-samantha_mirror = ["web/*", "web/assets/*"]
+samantha_mirror = ["web/*", "web/assets/*", "phone_app/*.apk"]
 
 [tool.ruff]
 line-length = 120

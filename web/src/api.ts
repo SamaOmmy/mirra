@@ -21,6 +21,7 @@ export interface ServerState {
   version: string;
   update?: { latest: string; url: string } | null;
   settings: Settings;
+  audio?: { enabled: boolean; listeners: number; recording: boolean };
 }
 
 export interface MonitorInfo {
@@ -35,6 +36,26 @@ export interface MonitorsResponse {
   limits: { fps: [number, number]; quality: [number, number]; scale: [number, number] };
   max_clients: number;
 }
+
+export interface PhoneState {
+  connected: boolean;
+  device: string;
+  app_version: string;
+  control: boolean;
+  watchers: number;
+  width: number;
+  height: number;
+  seq: number;
+  frame_age: number | null;
+  app_available: boolean;
+}
+
+/** What the page can ask the phone to do. Coordinates are fractions (0 to 1) of the screen. */
+export type PhoneInput =
+  | { t: "tap" | "long"; x: number; y: number }
+  | { t: "gesture"; pts: [number, number][]; ms: number }
+  | { t: "key"; k: "back" | "home" | "recents" | "notifications" | "quicksettings" | "wake" }
+  | { t: "text"; s: string };
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const r = await fetch(path, { credentials: "same-origin", cache: "no-store", ...init });
@@ -54,4 +75,7 @@ export const api = {
   login: (token: string) => post("/api/login", { token }),
   logout: () => post("/api/logout", {}),
   settings: (changes: Partial<Settings>) => post("/api/settings", changes) as Promise<Settings>,
+  phoneState: () => request<PhoneState>("/api/phone/state"),
+  phonePair: () => request<{ token: string }>("/api/phone/pair"),
+  phoneInput: (event: PhoneInput) => post("/api/phone/input", event),
 };

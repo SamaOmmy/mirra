@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "./api";
 import Settings from "./Settings";
+import { loadAudioPref, saveAudioPref, useAudio, type AudioPref } from "./useAudio";
 import { useStream, type Status } from "./useStream";
 import { useWakeLock } from "./useWakeLock";
 import { useZoom } from "./useZoom";
@@ -18,6 +19,9 @@ export default function Viewer({ onSignedOut }: { onSignedOut: () => void }) {
   const [showSettings, setShowSettings] = useState(false);
   const [fullscreen, setFullscreen] = useState(false);
   const stage = useRef<HTMLDivElement>(null);
+  const [audioPref, setAudioPref] = useState<AudioPref>(loadAudioPref);
+  const audio = useAudio(audioPref);
+  const changeAudio = useCallback((pref: AudioPref) => { saveAudioPref(pref); setAudioPref(pref); }, []);
   useWakeLock(status === "live");
   const zoom = useZoom(stage, () => setBarVisible((v) => !v));
 
@@ -91,6 +95,9 @@ export default function Viewer({ onSignedOut }: { onSignedOut: () => void }) {
         <span className="grow">
           {LABEL[status]}
           {live && <span className="muted"> · {fps} fps{size && ` · ${size}`}</span>}
+          {audio.status === "playing" && <span className="muted"> · sound on</span>}
+          {audio.status === "tap" && <span className="warn-text"> · tap the screen for sound</span>}
+          {audio.status === "error" && <span className="warn-text"> · no sound: {audio.error}</span>}
         </span>
         {zoom.scale > 1 && <button onClick={zoom.reset}>Reset zoom</button>}
       </header>
@@ -102,7 +109,8 @@ export default function Viewer({ onSignedOut }: { onSignedOut: () => void }) {
         <button onClick={toggleFullscreen}>{fullscreen ? "Exit full" : "Fullscreen"}</button>
       </footer>
 
-      {showSettings && <Settings onClose={() => setShowSettings(false)} onSignOut={signOut} current={server?.settings} server={server} />}
+      {showSettings && <Settings onClose={() => setShowSettings(false)} onSignOut={signOut} current={server?.settings} server={server}
+        audio={audioPref} audioStatus={audio.status} onAudio={changeAudio} />}
     </div>
   );
 }

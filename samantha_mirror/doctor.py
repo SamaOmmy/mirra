@@ -81,6 +81,17 @@ def run() -> int:
     except Exception:
         _check(r, WARN, "Fast encoder (OpenCV)", "not installed", "Slower but works. Try: pip install opencv-python-headless")
 
+    # Sound (optional: each phone switches it on for itself)
+    if cfg and not cfg.audio:
+        _check(r, OK, "PC sound for phones", "switched off (SM_AUDIO=0)")
+    else:
+        try:
+            from .audio import Loopback
+            _check(r, OK, "PC sound for phones", f"available ({Loopback().default_name()})")
+        except Exception as exc:
+            _check(r, WARN, "PC sound for phones", f"not available ({exc})",
+                   "Only needed if you want to hear the PC on your phone. Check that the PC has a speaker or headphones selected.")
+
     # Server
     if ip and cfg:
         try:
@@ -96,6 +107,11 @@ def run() -> int:
     else:
         _check(r, OK if state != "missing" else WARN, "Starts automatically at logon", state,
                "Optional: `samantha-mirror autostart install`")
+
+    # Android phone on this PC (optional)
+    from .server import PHONE_APP
+    _check(r, OK, "Phone on this PC (Android, optional)",
+           "the phone app is included" if PHONE_APP.exists() else "this copy has no phone app (see the README to build it)")
 
     try:
         newer = updater.available()

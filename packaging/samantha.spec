@@ -9,8 +9,11 @@ from PyInstaller.utils.hooks import collect_submodules
 HERE = SPECPATH  # noqa: F821  (provided by PyInstaller) directory of this file
 ROOT = os.path.abspath(os.path.join(HERE, ".."))
 
-hidden = collect_submodules("dxcam") + collect_submodules("comtypes") + ["waitress"]
+hidden = collect_submodules("dxcam") + collect_submodules("comtypes") + ["waitress", "pyaudiowpatch"]
 datas = [(os.path.join(ROOT, "samantha_mirror", "web"), "samantha_mirror/web")]
+apk_dir = os.path.join(ROOT, "samantha_mirror", "phone_app")   # built by android/build.py; the Android app phones install
+if os.path.isdir(apk_dir):
+    datas.append((apk_dir, "samantha_mirror/phone_app"))
 excludes = ["tkinter", "matplotlib", "pytest", "ruff", "IPython", "scipy", "pandas"]
 icon = os.path.join(HERE, "app.ico")
 

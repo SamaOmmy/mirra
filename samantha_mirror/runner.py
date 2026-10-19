@@ -121,7 +121,7 @@ def serve_forever(cfg: config.Config) -> int:
         listen = f"{ip}:{cfg.port}" + (f" 127.0.0.1:{cfg.port}" if cfg.loopback else "")
         try:
             # send_bytes=1 so each JPEG frame is flushed immediately instead of buffered.
-            server = create_server(create_app(cfg), listen=listen, threads=cfg.max_clients + 4,
+            server = create_server(create_app(cfg), listen=listen, threads=2 * cfg.max_clients + 4,
                                    send_bytes=1, ident="samantha-mirror", **PROXY_TRUST)
         except OSError as exc:
             if address_not_ready(exc) and time.monotonic() < deadline:

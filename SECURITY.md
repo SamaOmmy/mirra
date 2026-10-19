@@ -13,11 +13,18 @@ Samantha Screen Mirror shows your PC screen to another device, so it is built to
   (`SM_TOKEN`, 32+ characters, generated for you). It is compared in constant time. 10 wrong attempts in 5 minutes
   lock that device out.
 - **Cookie.** After the first sign-in the token is stored in an `HttpOnly`, `SameSite=Strict` cookie.
-- **View only.** There is no mouse, keyboard or file access from the phone.
+- **View only.** There is no mouse, keyboard or file access to the PC from the phone.
+- **Sound is opt-in.** Whoever has the token can ask the PC for its sound, like the screen, but nothing is recorded
+  until someone does, and `SM_AUDIO=0` removes the feature.
+- **Phone on the PC (Android).** The companion app connects **out** to your PC with your token and listens for nothing,
+  so the phone has no open port. It stays idle until a page on the PC is watching, shows a notification while it is,
+  and has a control switch and a pause switch. It uses Android's Accessibility permission, which you grant once and
+  can revoke at any time in Android settings. It cannot see banking-app or password screens (Android blocks them).
 
 ## What you should know
 
-- Anyone who has the token (for example from the QR code or link) can see your screen. Do not share or post it.
+- Anyone who has the token (for example from the QR code or link) can see your screen, and **if you paired an Android phone**,
+  see and use it too. Do not share or post it.
   To rotate it, change `SM_TOKEN` in your settings file and restart; every phone must sign in again.
 - Anyone who can already run programs on your PC, or who has access to your Tailscale account, is outside what
   this app can protect against.

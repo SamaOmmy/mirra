@@ -20,6 +20,8 @@ also build it yourself: see the project page.
 Other commands (open PowerShell in this folder):
   .\samantha-mirror.exe link      show the QR code again
   .\samantha-mirror.exe doctor    check that everything works
+  .\samantha-mirror.exe phone     Android: open the page that shows your phone on this PC and lets you
+                                  control it (set the phone up first: see the project page)
   .\samantha-mirror.exe uninstall remove start-at-logon and the HTTPS setup
 
 Do not move or delete this folder after setup: start-at-logon points to it.

@@ -1,5 +1,22 @@
 # Changelog
 
+## Unreleased
+
+New
+- **Sound from the PC on the phone.** Off by default. Switch it on per phone in Settings > Sound; *Use less data*
+  makes it mono at half the rate. The PC only records while someone listens; `SM_AUDIO=0` forbids it. Windows only
+  (uses the speakers' loopback).
+- **Your Android phone on the PC, with control.** A small companion app, *Samantha Phone*, lets the PC show the phone
+  and tap, swipe and type on it. No Developer options and no cable: you install the app from your own PC's Samantha
+  page, pair it and switch on one Accessibility permission, once. It uses Accessibility screenshots instead of screen
+  recording, so Android never asks "start recording?" again (slower: a few pictures per second). The phone connects out
+  to the PC and listens for nothing; the PC page is `/phone` (`samantha-mirror phone` opens it). The app is built with
+  the plain Android SDK tools (`python android/build.py`) and ships inside the download.
+- `doctor` reports on sound and on the phone app.
+
+Changes
+- The server now allows two streams per viewer (picture and sound), so up to `2 x SM_MAX_CLIENTS + 4` threads.
+
 ## 0.4.1
 
 Fixes

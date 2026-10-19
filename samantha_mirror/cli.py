@@ -1,4 +1,4 @@
-"""Command line: samantha-mirror [run|setup|link|doctor|start|stop|autostart|update|uninstall]"""
+"""Command line: samantha-mirror [run|setup|link|doctor|start|stop|phone|autostart|update|uninstall]"""
 import argparse
 import sys
 
@@ -33,6 +33,8 @@ def _double_clicked() -> int:
     if configured and autostart.status() == "disabled":
         print("Note: the server is stopped on purpose. Run `samantha-mirror start` in this folder to turn it back on.\n")
     code = show_link() if configured else setup()
+    if configured:
+        print("\nAndroid phone? To see it on this PC and use it with your mouse and keyboard, run: samantha-mirror phone")
     try:
         input("\nPress Enter to close this window...")
     except EOFError:
@@ -57,6 +59,8 @@ def main(argv=None) -> int:
     u.add_argument("-y", "--yes", action="store_true", help="install without asking")
     sub.add_parser("stop", help="stop the server and keep it stopped (until you run `start`)")
     sub.add_parser("start", help="start the server again (and let it start at logon)")
+    ph = sub.add_parser("phone", help="open the page that shows your Android phone on this PC and lets you control it")
+    ph.add_argument("--url", action="store_true", help="only print the address of the page")
     sub.add_parser("uninstall", help="remove autostart and the HTTPS setup (keeps your settings)")
 
     args = p.parse_args(argv)
@@ -107,6 +111,9 @@ def main(argv=None) -> int:
             return 1
         print("Started. It will also start at every logon again.")
         return 0
+    if cmd == "phone":
+        from .phonepage import open_phone_page
+        return open_phone_page(only_print=args.url)
     if cmd == "update":
         from .updater import run_update
         return run_update(args.check, args.yes)

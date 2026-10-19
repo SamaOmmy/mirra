@@ -9,3 +9,11 @@ dist/
 .pytest_cache/
 .ruff_cache/
 web/node_modules/
+
+# scrcpy download and remembered phone address (when run from a checkout)
+tools/
+phone.json
+
+android/*.keystore
+samantha_mirror/phone_app/*.apk
+*.idsig

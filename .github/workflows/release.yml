@@ -21,6 +21,23 @@ jobs:
       - name: Tag matches the version in the code
         if: startsWith(github.ref, 'refs/tags/')
         run: python -c "import samantha_mirror, sys; sys.exit(0 if 'v' + samantha_mirror.__version__ == '${{ github.ref_name }}' else 'tag ${{ github.ref_name }} != version ' + samantha_mirror.__version__)"
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - name: Build the Android app (it ships inside the zip)
+        shell: pwsh
+        env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          SM_KEYSTORE_PASS: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+        run: |
+          if ($env:KEYSTORE_B64) {
+            [IO.File]::WriteAllBytes("$env:RUNNER_TEMP/release.keystore", [Convert]::FromBase64String($env:KEYSTORE_B64))
+            $env:SM_KEYSTORE = "$env:RUNNER_TEMP/release.keystore"
+          } else {
+            Write-Warning "No ANDROID_KEYSTORE_BASE64 secret: signing with a throwaway key (phones cannot update the app in place)."
+          }
+          python android/build.py
       - run: pyinstaller packaging/samantha.spec --noconfirm --distpath dist --workpath build
       - name: Package
         shell: pwsh

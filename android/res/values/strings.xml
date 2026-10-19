@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Samantha Phone</string>
+    <string name="service_description">Lets the Samantha Screen Mirror app on your PC show this phone and tap, swipe and type on it. It only works for the PC you paired, and only while you have the PC page open.</string>
+</resources>

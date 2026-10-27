@@ -13,6 +13,7 @@ import subprocess
 import sys
 import tempfile
 import threading
+import time
 import urllib.request
 import zipfile
 from dataclasses import dataclass
@@ -166,20 +167,46 @@ def verify_sha256(path: Path, expected_line: str) -> None:
         raise UpdateError("The downloaded file does not match its checksum; not installing it.")
 
 
+DOWNLOAD_TRIES = 12   # a stalled or dropped download is picked up again where it stopped, this many times
+RETRY_WAIT = 3        # seconds, doubling, at most 30
+
+
 def _download(url: str, dest: Path) -> None:
-    request = urllib.request.Request(url, headers={"User-Agent": f"samantha-screen-mirror/{__version__}"})
-    try:
-        with urllib.request.urlopen(request, timeout=30) as resp, open(dest, "wb") as out:
-            total = int(resp.headers.get("Content-Length") or 0)
-            done = 0
-            while block := resp.read(1 << 20):
-                out.write(block)
-                done += len(block)
-                if total and sys.stdout is not None:
-                    print(f"\r  downloading... {done * 100 // total}%", end="", flush=True)
-        print()
-    except OSError as exc:
-        raise UpdateError(f"Download failed ({exc}).") from exc
+    """Download `url` to `dest`. A connection that stalls or drops is resumed (or restarted if the server can't
+    resume), so a slow or flaky line still gets there."""
+    done, total, last_error = 0, 0, None
+    dest.write_bytes(b"")
+    for attempt in range(DOWNLOAD_TRIES):
+        headers = {"User-Agent": f"samantha-screen-mirror/{__version__}"}
+        if done:
+            headers["Range"] = f"bytes={done}-"
+        try:
+            with urllib.request.urlopen(urllib.request.Request(url, headers=headers), timeout=30) as resp:
+                if done and resp.status != 206:   # the server sent the whole file again: start over
+                    done = 0
+                    dest.write_bytes(b"")
+                content_range = resp.headers.get("Content-Range", "")
+                if "/" in content_range and content_range.rsplit("/", 1)[1].isdigit():
+                    total = int(content_range.rsplit("/", 1)[1])
+                elif not done:
+                    total = int(resp.headers.get("Content-Length") or 0)
+                with open(dest, "ab") as out:
+                    while block := resp.read(1 << 20):
+                        out.write(block)
+                        done += len(block)
+                        if total and sys.stdout is not None:
+                            print(f"\r  downloading... {done * 100 // total}%", end="", flush=True)
+            if not total or done >= total:
+                if sys.stdout is not None:
+                    print()
+                return
+            last_error = "the connection ended early"
+        except OSError as exc:
+            last_error = exc
+        if sys.stdout is not None:
+            print(f"\n  the download stalled ({last_error}); continuing...")
+        time.sleep(min(30, RETRY_WAIT * 2 ** attempt))
+    raise UpdateError(f"Download failed ({last_error}). Check the internet connection and try again.")
 
 
 def swap_script(install: Path, new: Path, task: str, caller_pid: int, log: Path, relaunch: str = "") -> str:

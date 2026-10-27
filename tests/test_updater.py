@@ -224,3 +224,69 @@ def test_swap_works_while_a_program_sits_inside_the_install_folder(tmp_path):
     assert (install / "new.txt").exists() and (install / "_internal" / "lib.txt").exists()
     assert not (install / "old.txt").exists() and not new.exists() and not (tmp_path / "SamanthaScreenMirror.old").exists()
     assert "updated" in (tmp_path / "update.log").read_text()
+
+
+class _FlakyServer:
+    """Serves `data`; the first `drops` responses send only part of it and then cut the connection.
+    `ranges=False` ignores Range requests (sends the whole file again), like some download servers."""
+
+    def __init__(self, data: bytes, drops: int, ranges: bool = True):
+        import http.server
+        import threading
+
+        outer = self
+        self.requests = []
+
+        class Handler(http.server.BaseHTTPRequestHandler):
+            def log_message(self, *args):
+                pass
+
+            def do_GET(self):
+                rng = self.headers.get("Range")
+                outer.requests.append(rng)
+                start = int(rng[6:-1]) if rng and ranges else 0
+                body = data[start:]
+                self.send_response(206 if start else 200)
+                if start:
+                    self.send_header("Content-Range", f"bytes {start}-{len(data) - 1}/{len(data)}")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                if len(outer.requests) <= drops:
+                    self.wfile.write(body[: len(body) // 3])
+                    self.wfile.flush()
+                    self.connection.shutdown(2)   # drop the line mid-download
+                    return
+                self.wfile.write(body)
+
+        self.server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+        self.url = f"http://127.0.0.1:{self.server.server_address[1]}/file.zip"
+        threading.Thread(target=self.server.serve_forever, daemon=True).start()
+
+    def close(self):
+        self.server.shutdown()
+
+
+@pytest.mark.parametrize("ranges", [True, False])
+def test_a_dropped_download_is_picked_up_again(tmp_path, monkeypatch, ranges):
+    monkeypatch.setattr(updater, "RETRY_WAIT", 0)
+    data = bytes(range(256)) * 4000
+    server = _FlakyServer(data, drops=2, ranges=ranges)
+    try:
+        updater._download(server.url, tmp_path / "f.zip")
+    finally:
+        server.close()
+    assert (tmp_path / "f.zip").read_bytes() == data
+    assert len(server.requests) == 3
+    if ranges:
+        assert server.requests[0] is None and server.requests[1].startswith("bytes=")   # resumed, not restarted
+
+
+def test_a_download_that_never_finishes_gives_up_clearly(tmp_path, monkeypatch):
+    monkeypatch.setattr(updater, "RETRY_WAIT", 0)
+    monkeypatch.setattr(updater, "DOWNLOAD_TRIES", 3)
+    server = _FlakyServer(b"x" * 300_000, drops=99)
+    try:
+        with pytest.raises(updater.UpdateError, match="Download failed"):
+            updater._download(server.url, tmp_path / "f.zip")
+    finally:
+        server.close()

@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.5.1
+
+Fixes
+- **Updates no longer give up on a slow or flaky connection.** A download that stalls or drops is picked up again
+  where it stopped (or restarted if the server can't resume), up to 12 times, instead of failing with "the read
+  operation timed out". The checksum is still verified before anything is installed.
+
 ## 0.5.0
 
 Two apps, both ways: **Samantha** on the PC and **Samantha** on Android.

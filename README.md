@@ -1,125 +1,74 @@
 # Samantha Screen Mirror
 
-See your Windows PC screen live on your phone, from anywhere, privately. No accounts, no cloud, no port forwarding:
-the picture goes straight from your PC to your phone through your own [Tailscale](https://tailscale.com) network.
+**Your Windows PC on your phone, and your Android phone on your PC.** From anywhere, privately. No accounts, no
+cloud, no port forwarding: everything goes straight between your own devices through your own
+[Tailscale](https://tailscale.com) network.
 
-## What is this for?
+There are two apps, and they talk to each other:
 
-Samantha Screen Mirror lets you **look at your Windows PC's screen from your phone, wherever you are**. Typical uses:
+- **Samantha for Windows**, a window on your PC. It runs quietly in the background and starts with Windows.
+- **Samantha for Android**, an app on your phone.
+
+| On the phone | On the PC |
+|---|---|
+| **Show my PC**: watch your PC screen live, full screen, pinch to zoom, up to 60 fps | **My phone**: see your phone live and use it with the mouse and keyboard |
+| Hear the PC's sound (if you switch it on) | Click to tap, drag to swipe, scroll with the wheel, type on the keyboard |
+| Screenshots of the PC, quality presets, screen picker | Back, Home, Recent apps, Notifications buttons, a View-only switch |
+
+<p align="center">
+  <img src="docs/screenshots/pc-phone.png" width="560" alt="The Samantha window on the PC showing an Android phone">
+  <img src="docs/screenshots/android-home.png" width="200" alt="The Samantha app on Android">
+</p>
+
+## What is it for?
 
 - Check on a **long download, render, export, backup or install** without walking back to the desk
 - Keep an eye on a **home or work PC** that is running something while you are out
-- **Read something** on the big screen from the couch or another room (zoom in with two fingers)
-- Quickly grab a **screenshot** of what the PC is showing
+- **Read something** on the big screen from the couch (pinch to zoom), or listen to what the PC is playing
+- **Answer a message or use an app on your phone from the PC**, with a real keyboard, while the phone stays in your bag
 
-What it is **not**: it does not let you click or type on the PC (the PC is view-only on purpose, which makes it much
-safer), it is not for sharing your screen with other people, and it is not a cloud service. Your screen goes
-straight from your PC to your own phone through [Tailscale](https://tailscale.com), a free private network, and
-nobody else (including this project) can see it.
+What it is **not**: the phone can only *look at* the PC (no clicking or typing on the PC, on purpose, which makes it
+much safer); it is not for sharing your screen with other people; and it is not a cloud service. Nobody else,
+including this project, can see anything.
 
-## Features
+## Get started
 
-- **Installable app** (PWA) with pinch-zoom, screenshots, quality presets and a screen picker
-- **Fast**: up to **60 fps** (the *Smooth* preset) with GPU capture. Measured on a 60 Hz screen: 59.7 fps over the
-  real stream at 1440x810, 16.8 ms median gap between frames. The default is 30 fps to be gentle on batteries and data.
-- **Sound, if you want it**: hear the PC's sound on the phone. Off by default; each phone switches it on for itself
-  in Settings, and the PC records nothing while nobody listens.
-- **The other way round (Android)**: see your **phone on the PC** and use it with the mouse and keyboard, with a small
-  companion app. No Developer options, no cable. See [Your phone on the PC](#your-phone-on-the-pc-android).
-- **Private**: only reachable inside your tailnet, protected by a secret token. The PC is **view-only** from the phone
-- **Easy setup**: one script installs everything and shows a QR code for your phone
+You need: a Windows 10/11 PC, an Android phone (Android 11 or newer), and a free Tailscale account.
+(iPhone? See [iPhone](#iphone).)
 
-<p align="center">
-  <img src="docs/screenshots/login.png" width="230" alt="Sign-in screen">
-  <img src="docs/screenshots/viewer.png" width="230" alt="Live view of the PC screen">
-  <img src="docs/screenshots/settings.png" width="230" alt="Settings: presets, screen picker, sliders">
-</p>
+**On the PC**
 
-*(Screenshots use a demo picture, not a real desktop.)*
+1. Download `SamanthaScreenMirror-windows.zip` from the [Releases](../../releases/latest) page and unzip it somewhere
+   permanent (for example `C:\Apps`).
+2. Double-click **`Samantha.exe`**. (Windows may warn about an unrecognised app because the program is not
+   code-signed: choose *More info > Run anyway*.)
+3. The window checks **Tailscale** (it offers to install it; open it and sign in) and then **Start Samantha**.
+   From now on Samantha starts by itself when you log in to Windows, and the Samantha shortcut opens the window.
 
-> Status: early. Windows only for now. You cannot control the PC from the phone; you can control an Android phone from the PC.
+**On the phone**
 
-## Quick start
+1. Install the free **Tailscale** app from the Play Store, sign in with the **same account** as the PC and switch it on.
+2. On the PC, Samantha's **Home** page shows a QR code: scan it with the phone's camera to download **Samantha for
+   Android**, then open the file to install it (Android asks once to allow installs from your browser).
+3. Open Samantha on the phone. On the PC click **Show a code**. Type the **PC address** and the **code** from the PC
+   into the phone and tap **Connect**. That's it: the phone remembers the PC.
 
-You need: a Windows 10/11 PC, a phone (Android or iPhone), and a free Tailscale account.
-The phone needs **no download from us**: it uses the free Tailscale app plus this app in its browser
-(installable to the home screen). Only the PC needs the installer below.
+**To see the PC on the phone:** tap **Show my PC**.
 
-### Option A: download (no Python, no PowerShell)
+**To see and use the phone on the PC** (once): in the phone app, under *Let this PC see and use my phone*, tap
+**Turn it on**, choose Samantha in the list and switch it on. Then open **My phone** in the window on the PC.
 
-1. Download `SamanthaScreenMirror-windows.zip` from the [Releases](../../releases) page and unzip it somewhere permanent.
-2. Double-click `samantha-mirror.exe` and follow the prompts. (Windows may warn about an unrecognised app because
-   the program is not code-signed: choose *More info > Run anyway*.)
-3. Do step 3 below on your phone.
+> **"Restricted setting"?** Android 13 and newer block that switch for apps installed outside the Play Store. Tap the
+> switch once so Android blocks it, then in the Samantha app tap **Open App info**, tap the **three dots** at the top
+> right and choose **Allow restricted settings**, and switch it on again. The three dots only appear *after* Android
+> has blocked the switch once.
 
-### Option B: from source
+## Using it
 
-1. **Get the code** (or download the ZIP and unpack it):
-   ```powershell
-   git clone https://github.com/SamaOmmy/samantha-screen-mirror
-   cd samantha-screen-mirror
-   ```
-2. **Run the installer** in PowerShell:
-   ```powershell
-   .\install.ps1
-   ```
-   It installs Python if needed (with your permission), then guides you through:
-   Tailscale (offers to install it) -> your secret token -> optional HTTPS -> start-at-logon -> a **QR code**.
-3. **On your phone** (both options): install the free Tailscale app, sign in with the *same account* as the PC, switch it on,
-   then scan the QR code. You are looking at your PC. Use the browser menu to **Install app**.
-
-From then on, just open the app on your phone. The server starts by itself when you log in to Windows.
-
-**Lost the QR code, or signing in another phone?** On the **PC**: double-click `samantha-mirror.exe` again (Option A),
-or in PowerShell run `.\.venv\Scripts\samantha-mirror link` from the project folder (Option B). It shows the QR code
-again. Then scan it with the phone camera.
-
-## Commands
-
-All of these run **on the PC** (never on the phone). Open PowerShell (press the Windows key, type `PowerShell`, press
-Enter), go to the program's folder, then:
-
-- Option A (downloaded zip): `.\samantha-mirror.exe <command>`
-- Option B (from source): `.\.venv\Scripts\samantha-mirror <command>`
-
-For example `.\samantha-mirror.exe doctor`. Below, `samantha-mirror` stands for whichever of those you use.
-
-| Command | What it does |
-|---|---|
-| `samantha-mirror setup` | Guided first-time setup (safe to run again) |
-| `samantha-mirror link` | Show the phone link and QR code |
-| `samantha-mirror doctor` | Check everything and say how to fix problems |
-| `samantha-mirror run` | Start the server in this window (Ctrl+C stops it) |
-| `samantha-mirror stop` | Stop the server and keep it stopped (also after a restart) |
-| `samantha-mirror start` | Start it again and let it start at logon again |
-| `samantha-mirror phone` | Open the page that shows your Android phone on this PC and lets you control it (see below) |
-| `samantha-mirror autostart install/remove/status` | Start hidden at every Windows logon |
-| `samantha-mirror update` | Check for and install a new version |
-| `samantha-mirror uninstall` | Remove autostart and the HTTPS setup (keeps your settings) |
-
-## How it works
-
-```
-phone (Tailscale app + browser/PWA)  --WireGuard-->  your PC: Samantha Screen Mirror
-                                                        |- grabs the screen (DXGI GPU capture)
-                                                        |- encodes JPEGs only when the picture changes
-                                                        `- serves the app + stream, token required
-```
-
-- The server listens **only** on your Tailscale address (`100.x.y.z`); it refuses to start otherwise.
-- Capture runs only while someone is watching.
-- Optional HTTPS comes from `tailscale serve` (a Tailscale feature that stays inside your tailnet). It is what
-  lets the phone offer a real **Install app**. Without it the app still works in the browser.
-
-See [SECURITY.md](SECURITY.md) for the full threat model.
-
-## Using the app
-
-Tap the screen to show/hide the bars. Pinch to zoom, drag to pan, double-tap to reset.
-**Settings** has presets (Data saver / Balanced / Sharp), a screen picker (multi-monitor), fps / quality /
-resolution sliders and a pointer toggle. **Screenshot** saves a full-resolution PNG. The phone screen stays on while you watch.
-**My PCs** (in Settings) bookmarks your other PCs so you can switch between them; each PC has its own address and
-sign-in.
+**The phone app.** *Show my PC* opens the PC full screen. Tap to show or hide the bars, pinch to zoom, drag to look
+around, double-tap to zoom in or back out. **Rotate** switches between sideways (the default, a PC screen is wide) and
+upright. **More** has the quality presets, the screen picker (for several monitors), the mouse pointer switch and
+**Save a screenshot of the PC** (full resolution, into *Pictures/Samantha*). The phone stays awake while you watch.
 
 | Preset | Size | fps | Roughly (constant motion) |
 |---|---|---|---|
@@ -128,69 +77,117 @@ sign-in.
 | Sharp | 1920x1080 | 30 | 5 MB/s |
 | Smooth | 1440x810 | 60 | 6 MB/s |
 
-*Smooth* shows motion as it happens, but it sends twice the data, so use it on Wi-Fi, and an older phone may not
-be able to draw 60 pictures a second (the fps shown at the top of the app tells you what your phone really gets).
-A 60 Hz screen cannot show more than 60 fps; a faster screen is still captured at up to 60.
+A still screen costs almost nothing, because pictures are only sent when something changes. *Smooth* sends twice the
+data, so use it on Wi-Fi. Presets apply to everyone watching that PC.
 
-A still screen costs almost nothing because frames are only sent when something changes.
+**Sound.** Switch on **Play the PC's sound** in the phone app (or **Sound** in the viewer). It is off until you do,
+and it is per phone. The phone plays whatever the PC plays (the PC's speakers keep playing too). It needs about
+1.5 Mbit/s (*Use less data* makes it mono: a quarter of that) and runs a fraction of a second behind the picture.
+The PC records nothing while no phone listens. To forbid sound completely, switch it off under **Settings** in the
+window on the PC.
 
-### Sound
+**The window on the PC.**
+- **Home**: whether Samantha is on (**Turn off** keeps it off, also after a restart, until **Turn on**), the PC's
+  address and a pairing code, and **Update now** when there is a new version.
+- **My phone**: your phone, live (about 3 pictures a second: Android allows no more for this). Click to tap, hold
+  for a long press, drag to swipe, scroll with the wheel. Click the phone, then type on your keyboard; Esc is Back.
+  **View only** stops the mouse and keyboard from doing anything. The phone only sends its screen while this page is
+  open, and shows a notification while it does.
+- **Settings**: sound, **Sign out all phones** (they need a new code), the browser link for an iPhone, and updates.
 
-**Settings > Sound > Hear this PC's sound on this phone.** It is off until you switch it on, it is remembered
-per phone, and it is not a PC-wide setting, so one phone listening does not make another one listen. With it on, the
-phone plays whatever the PC plays (the PC's own speakers keep playing too). The first time after opening the app your
-browser may ask for one tap on the screen before it lets any page play sound. *Use less data (mono)* sends a quarter
-of the data. Sound needs about 1.5 Mbit/s, and it can run a fraction of a second behind the picture,
-so it is for listening, not for lip-sync. On an iPhone, the silent switch mutes it. The PC records nothing while
-nobody listens. To forbid sound completely, set `SM_AUDIO=0` on the PC.
+Closing the window does not stop Samantha; it keeps running in the background so your phone can always reach the PC.
 
-## Your phone on the PC (Android)
+**On the phone, you stay in control.** *Allow tapping, swiping and typing* (on by default) and **Pause** are in the
+app, and turning off the Accessibility switch in Android stops it completely.
 
-The other direction: **look at your Android phone on the PC and use it with the mouse and keyboard.** Click to tap,
-hold to long-press, drag to swipe, scroll with the wheel, and type on the PC keyboard. It needs a small companion app,
-**Samantha Phone**, on the phone. There is **no Developer mode, no USB debugging, no cable**, and nothing extra to
-install on the PC. Android only (iPhones do not allow this), Android 11 or newer.
+## Updates
 
-**Set it up once** (on the phone, in the Samantha app you already use):
+Both apps update themselves:
 
-1. **Settings > Use this phone from the PC > Download the app**, then open the downloaded file to install it. Android
-   asks once to allow installs from your browser.
-2. Tap **Pair this app**. It opens Samantha Phone and links it to this PC (the app stores your PC's address and token).
-3. In Samantha Phone, tap **Open Accessibility settings**, choose **Samantha Phone** and switch it on. On Android 13 and
-   newer the switch can be greyed out for apps installed outside the Play Store: open *App info*, tap the three dots,
-   choose *Allow restricted settings*, then switch it on.
+- **PC**: when a new version is out, the window shows **Update available**. Click **Update now**: it downloads the new
+  version from this project's Releases page, checks its SHA-256 checksum, swaps it in (your settings are kept; a failed
+  swap puts the old version back), restarts Samantha and reopens the window. It checks GitHub every 12 hours.
+- **Phone**: after the PC has updated, the phone app shows **Update available**. Tap **Update**: it downloads the
+  matching app from your own PC and Android asks you to confirm. (The first time, Android asks to allow Samantha to
+  install updates.)
 
-Then, on the PC, run `samantha-mirror phone` (or open the `/phone` page of your Samantha address). The phone shows up and
-you control it with the mouse. Nothing is asked again after step 3: no "start recording" question, ever.
+**Coming from 0.4.x?** Run the update once as before (`samantha-mirror update`, or double-click `samantha-mirror.exe`
+and say yes). Your shortcuts and taskbar pin then open the new window. If you had installed the earlier companion app
+*Samantha Phone*, it updates to the new Samantha app from the PC; if Android says the update conflicts with the
+installed app, uninstall the old one and install the new one from the QR code on the PC.
 
-**Why Accessibility and not "screen recording"?** Android asks "Start recording your screen?" for every session and
-does not let any app remember the answer (since Android 14 each recording needs a fresh yes). The Accessibility permission
-is granted once and also includes taking screenshots, so the app uses that. The price is speed: Android allows a few
-screenshots per second, so the picture is smoother than a slideshow but far from video. It is meant for operating the
-phone, not for watching films on it.
+## iPhone
 
-**How it stays private**
+There is no iPhone app (Apple does not allow one to be installed from outside the App Store), and an iPhone cannot be
+shown on the PC. An iPhone can still **watch the PC** in Safari: in the window on the PC go to **Settings > iPhone or a
+web browser > Show the link**, and scan it with the iPhone's camera (Tailscale must be on in the iPhone). Then
+*Share > Add to Home Screen*. The same works in any browser in your tailnet.
 
-- The phone app **connects out** to your PC through Tailscale, with your token. It never listens for connections, so
-  nothing can reach into the phone.
-- It does nothing until a page on the PC is open. While one is watching, Android shows a notification on the phone.
-- In the app, **"Let the PC tap, swipe and type"** (on by default) and **Pause** are one switch away, and turning off the
-  Accessibility switch stops everything. The PC page also has a **View only** box.
-- Anyone who has your token can use this the same way you can, so keep it private (see [SECURITY.md](SECURITY.md)).
+## How it works
 
-**Limits.** Banking apps and password prompts are blocked by Android and show black. A swipe is sent when you let go of the
-mouse, not live while you drag. Typing works in normal text fields. The phone's sound does not come to the PC. Pairing
-links the app to **one** PC; to change PCs, pair again.
+```
+Android: Samantha app ----Tailscale (WireGuard)----> PC: Samantha (background service + window)
+  Show my PC   <---- picture (JPEG stream), sound (PCM) ----   screen capture (DXGI), speaker loopback
+  phone screen ----- screenshots (Accessibility) --------->   "My phone" in the window
+  taps, typing <---- commands -----------------------------   mouse and keyboard in the window
+```
+
+- The PC listens **only** on its Tailscale address (`100.x.y.z`) and refuses to start otherwise. Every request needs
+  the secret token, which the phone gets once by sending the pairing code.
+- The phone app always connects **out** to the PC. It never accepts connections, so nothing can reach into the phone.
+- Capture runs only while someone is watching, in both directions.
+
+See [SECURITY.md](SECURITY.md) for the full threat model.
+
+## Troubleshooting
+
+The window's Home page says what is wrong. For a full check, run `samantha-mirror doctor` (see *Command line* below).
+
+- **The phone says "Can't reach your PC"**: Tailscale is off on the phone, or the PC is asleep or not signed in to
+  Windows. Set Windows to never sleep while plugged in (Settings > System > Power).
+- **"This PC no longer accepts this phone"**: someone used *Sign out all phones* (or the token changed). In the phone
+  app tap *Forget this PC* and pair again with a new code.
+- **"That code is wrong or has run out"**: click **New code** on the PC and type it within 10 minutes.
+- **"PC screen can't be captured right now"**: the PC is locked or showing a secure prompt (UAC). It recovers when you
+  unlock it.
+- **"My phone" says no phone is connected**: in the phone app, *Let this PC see and use my phone* should say
+  *Connected*. If it says *Off*, switch on Accessibility (see *Get started*). If *Pause* is on, switch it off.
+- **No sound on the phone**: switch it on in the phone app, check the phone's volume, and check that sound is allowed
+  in the window's Settings.
+- **I want it off for now**: **Turn off** on the window's Home page. It stays off until you **Turn on** again.
+- **Choppy on mobile data**: choose the *Data saver* preset (viewer > More).
+- **Nothing connects at all**: a Windows Firewall rule may be needed. In an Administrator PowerShell:
+  ```powershell
+  New-NetFirewallRule -DisplayName "Samantha Screen Mirror (Tailscale only)" -Direction Inbound `
+    -Protocol TCP -LocalPort 8787 -RemoteAddress 100.64.0.0/10 -Action Allow
+  ```
+
+## Command line
+
+Everything is in the window, but the command line is there for scripts and troubleshooting. In PowerShell, in the
+program's folder: `.\samantha-mirror.exe <command>` (from source: `.\.venv\Scripts\samantha-mirror <command>`).
+
+| Command | What it does |
+|---|---|
+| `app` | Open the Samantha window |
+| `doctor` | Check everything and say how to fix problems |
+| `setup` | Guided first-time setup in the console |
+| `link` | Show the browser link and QR code (for an iPhone) |
+| `run` | Run the server in this console (Ctrl+C stops it) |
+| `stop` / `start` | Turn Samantha off (stays off after a restart) / on again |
+| `autostart install/remove/status` | Start hidden at every Windows logon |
+| `update` | Check for and install a new version (`--check` only looks, `-y` skips the question) |
+| `uninstall` | Remove autostart and the HTTPS setup (keeps your settings) |
 
 ## Settings file
 
-Created by `setup`: `%APPDATA%\SamanthaScreenMirror\.env` (or the project folder when you run from a checkout;
-set `SM_HOME` to use another folder). Defaults are shown below; you rarely need to touch them.
+`%APPDATA%\SamanthaScreenMirror\.env` (or the project folder when you run from a checkout; set `SM_HOME` to use
+another folder). The window manages it; you rarely need to touch it.
 
 | Variable | Default | Meaning |
 |---|---|---|
-| `SM_TOKEN` | generated | Access secret, min 16 chars. **Keep private.** |
-| `SM_PORT` | 8787 | Port on the Tailscale address |
+| `SM_TOKEN` | generated | Access secret, min 16 chars. **Keep private.** *Sign out all phones* replaces it. |
+| `SM_PORT` | 8787 | Port on the Tailscale address (the phone app assumes 8787 unless you type another) |
 | `SM_MONITOR` | 1 | Monitor to start with (0 = all combined) |
 | `SM_FPS` | 30 | Max frames per second (1-60) |
 | `SM_JPEG_QUALITY` | 70 | 10-95 |
@@ -199,88 +196,37 @@ set `SM_HOME` to use another folder). Defaults are shown below; you rarely need 
 | `SM_CURSOR` | 1 | Draw the mouse pointer on the stream |
 | `SM_CAPTURE` | auto | `auto` (DXGI, falls back to mss), `dxgi`, or `mss` |
 | `SM_UPDATE_CHECK` | 1 | Look for new releases on GitHub every 12 hours (only contacts api.github.com) |
-| `SM_AUDIO` | 1 | Let phones listen to this PC's sound (each phone must also switch it on). `0` forbids it |
-| `SM_LOOPBACK` | 0 | Also listen on 127.0.0.1 (set by `setup` when you enable HTTPS) |
-
-The app's Settings sheet changes fps / quality / size / screen live (shared by all viewers; reset on restart).
-
-## Updating
-
-When a new version is released, the app shows **Update available** in Settings. On the PC:
-
-```powershell
-samantha-mirror update          # asks first; add -y to skip the question, --check to only look
-```
-
-It works for both install types: a git install fast-forwards to the new release and refreshes its packages; the
-.exe download is fetched from the Releases page, verified against its SHA-256 checksum, and swapped in (your
-settings and token are kept; a failed swap restores the old version). The server restarts by itself. Double-clicking
-`samantha-mirror.exe` also offers the update. The PC checks GitHub every 12 hours; `SM_UPDATE_CHECK=0` turns that
-off. Updates are only ever started on the PC, never from the phone.
-
-**Updating from v0.4.0 or older (one time):** those versions cannot swap their own folder while a window is open
-inside it. Run that one update from a different folder, for example in PowerShell:
-`cd $HOME`, then run `samantha-mirror.exe update` using its full path (for example `& "D:\Apps\SamanthaScreenMirror\samantha-mirror.exe" update`).
-From v0.4.1 on, it works from anywhere.
-
-## Troubleshooting
-
-Start with `samantha-mirror doctor`. Common causes:
-
-- **Phone says "Can't reach your PC"**: Tailscale is off on the phone, or the PC is asleep / not signed in to Windows.
-  Set Windows to never sleep while plugged in (Settings > System > Power).
-- **"Your PC is reachable, but the mirror isn't running"**: the server isn't up. It starts at logon and retries by
-  itself (and the start-at-logon task re-checks every 5 minutes), so wait a minute after a restart. If it
-  persists, run `samantha-mirror doctor` and look at `samantha-mirror.log` in your settings folder.
-- **"PC screen unavailable"**: the PC is locked or showing a secure prompt (UAC). It recovers when you unlock.
-- **No "Install app" option**: you opened the plain `http://100.x...` address. Run `samantha-mirror setup`, enable
-  HTTPS in your Tailscale admin console if asked, and use the `https://...ts.net` address.
-- **Page does not load at all**: a Windows Firewall rule may be needed for the plain-HTTP address. In an
-  Administrator PowerShell:
-  ```powershell
-  New-NetFirewallRule -DisplayName "Samantha Screen Mirror (Tailscale only)" -Direction Inbound `
-    -Protocol TCP -LocalPort 8787 -RemoteAddress 100.64.0.0/10 -Action Allow
-  ```
-- **I want it off for now**: run `samantha-mirror stop` on the PC. Killing it in Task Manager only works until the
-  next automatic check (within 5 minutes); `stop` keeps it off, `start` turns it back on.
-- **Choppy on mobile data**: pick the *Data saver* preset.
-- **No sound on the phone**: switch it on in Settings > Sound, then tap the screen once. Check the phone's volume
-  and (iPhone) the silent switch. `samantha-mirror doctor` shows whether the PC can record its sound.
-- **The phone page says "No phone is connected"**: on the phone, open Samantha Phone. It should say *Connected*. If it
-  says Accessibility is off, switch it on (see *Set it up once*). If it can't reach the PC, check that Tailscale is on in
-  the phone and that you paired with this PC's address. The phone app also stops when you set it to *Pause*.
-- **The Accessibility switch is greyed out**: Android 13+ blocks it for apps installed from outside the Play Store until
-  you open *App info*, tap the three dots and choose *Allow restricted settings*.
+| `SM_AUDIO` | 1 | Let phones hear this PC's sound (each phone must also switch it on). `0` forbids it |
+| `SM_LOOPBACK` | 0 | Also listen on 127.0.0.1 (set by `setup` when you enable HTTPS for the iPhone page) |
 
 ## Limitations
 
-- Windows only (the capture and autostart code is Windows-specific). Ports to macOS/Linux are welcome.
-- The PC is view-only from the phone **by design** (no remote control of the PC, now or later). Controlling an
-  Android phone from the PC is the other direction and is separate (see above). iPhones can't be shown on the PC.
-- Sound is raw uncompressed audio (no codec), so it needs Wi-Fi-like bandwidth, and its delay is roughly 0.2 to 0.3 seconds.
-- The picture is a JPEG stream, not video. Unchanged frames cost nothing, so documents and desktops are very
-  light; full-screen video or games over a slow connection will look choppy (use the *Data saver* preset).
-  H.264 video was evaluated and left out on purpose: the good software encoder (x264) is GPL, which would change this
-  project's MIT license for the downloadable build, and hardware encoders only exist on some GPUs.
+- Windows only on the PC side (capture and autostart are Windows-specific). Android only on the phone side.
+- The PC is view-only from the phone **by design** (no remote control of the PC, now or later).
+- The phone on the PC is a few pictures a second (Android's limit for this permission): fine for using apps and
+  reading, not for watching videos. Banking apps and password prompts show black (Android blocks them). A swipe is
+  sent when you let go of the mouse. Typing works in normal text fields. The phone's sound does not come to the PC.
+- Sound is raw uncompressed audio (no codec), so it needs Wi-Fi-like bandwidth.
+- The PC picture is a JPEG stream, not video: documents and desktops are very light, full-screen video over a slow
+  connection looks choppy. H.264 was left out on purpose: the good software encoder (x264) is GPL, which would change
+  this project's MIT license for the download.
 
 ## Development
 
 See [CONTRIBUTING.md](CONTRIBUTING.md). Quick version: `pip install -e ".[dev]"`, then `ruff check .` and `pytest`.
-The .exe download is built by CI when a version tag (e.g. `v0.3.0`) is pushed; locally:
-`pip install pyinstaller` then `pyinstaller packaging/samantha.spec --noconfirm`.
-The web app is React + Vite in `web/`; its build output in `samantha_mirror/web/` is committed.
+CI builds the Windows download and the Android app when a version tag (e.g. `v0.5.0`) is pushed.
 
 ```
 samantha_mirror/
-  cli.py        commands          wizard.py   guided setup + QR
-  runner.py     start the server  doctor.py   health checks
-  server.py     Flask routes      tailscale.py  find the address, HTTPS via tailscale serve
-  capture.py    screen -> JPEG    autostart.py  Task Scheduler   updater.py   check/install releases
-  auth.py       token + lockout   config.py     settings
-  web/          built web app (from web/)
-web/            React + TypeScript source
-packaging/      PyInstaller spec for the Windows .exe download
-tests/          pytest
+  desktop.py    the Samantha window (Tkinter)     server.py   Flask routes (the API both apps use)
+  capture.py    screen -> JPEG                    audio.py    speaker loopback -> PCM
+  phonelink.py  phone <-> PC relay                pairing.py  6-digit pairing codes
+  runner.py     background service                updater.py  check/install releases
+  cli.py        command line                      doctor.py, wizard.py, tailscale.py, autostart.py, ...
+  web/          built browser page for iPhones (source in web/)
+android/        the Android app (plain Java, built by android/build.py without Gradle)
+packaging/      PyInstaller spec for the Windows download
+tests/          pytest (tests/test_android.py also runs the app's networking code on the PC)
 ```
 
 ## License

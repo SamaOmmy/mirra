@@ -182,13 +182,17 @@ def _download(url: str, dest: Path) -> None:
         raise UpdateError(f"Download failed ({exc}).") from exc
 
 
-def swap_script(install: Path, new: Path, task: str, caller_pid: int, log: Path) -> str:
-    """PowerShell that replaces the install folder once this program has exited."""
+def swap_script(install: Path, new: Path, task: str, caller_pid: int, log: Path, relaunch: str = "") -> str:
+    """PowerShell that replaces the install folder once this program has exited.
+
+    `relaunch`: the name of a program in the folder to open again afterwards (the Samantha window that started it).
+    """
     def q(p) -> str:
         return "'" + str(p).replace("'", "''") + "'"
     return f"""
 $ErrorActionPreference = 'Stop'
 $install = {q(install)}; $new = {q(new)}; $old = $install + '.old'; $task = {q(task)}; $log = {q(log)}
+$relaunch = {q(relaunch)}
 function Log($m) {{ Add-Content -Path $log -Value ((Get-Date -Format s) + ' ' + $m) }}
 try {{
   Get-Process -Id {caller_pid} -ErrorAction SilentlyContinue | Wait-Process -Timeout 60 -ErrorAction SilentlyContinue
@@ -196,7 +200,7 @@ try {{
   $wasDisabled = (Get-ScheduledTask -TaskName $task -ErrorAction SilentlyContinue).State -eq 'Disabled'
   Disable-ScheduledTask -TaskName $task -ErrorAction SilentlyContinue | Out-Null
   Stop-ScheduledTask -TaskName $task -ErrorAction SilentlyContinue
-  Get-Process samantha-mirror-service, samantha-mirror -ErrorAction SilentlyContinue |
+  Get-Process samantha-mirror-service, samantha-mirror, Samantha -ErrorAction SilentlyContinue |
     Where-Object {{ $_.Path -and $_.Path.StartsWith($install, [StringComparison]::OrdinalIgnoreCase) }} |
     Stop-Process -Force -ErrorAction SilentlyContinue
   Start-Sleep -Seconds 2
@@ -230,10 +234,14 @@ if (-not $wasDisabled) {{
   Enable-ScheduledTask -TaskName $task -ErrorAction SilentlyContinue | Out-Null
   Start-ScheduledTask -TaskName $task -ErrorAction SilentlyContinue
 }}
+if ($relaunch) {{
+  $program = Join-Path $install $relaunch
+  if (Test-Path -LiteralPath $program) {{ Start-Process -FilePath $program -WorkingDirectory $install }}
+}}
 """
 
 
-def update_exe(release: Release) -> None:
+def update_exe(release: Release, relaunch: Path | None = None) -> None:
     if not (release.zip_url and release.sha_url):
         raise UpdateError("This release has no verified Windows download yet; try again later.")
     install = Path(sys.executable).resolve().parent
@@ -268,8 +276,8 @@ def update_exe(release: Release) -> None:
                        check=False, capture_output=True)
 
     script = Path(tempfile.gettempdir()) / "samantha-update-swap.ps1"
-    script.write_text(swap_script(install, staging, autostart.TASK, os.getpid(), install.parent / "update.log"),
-                      encoding="utf-8")
+    script.write_text(swap_script(install, staging, autostart.TASK, os.getpid(), install.parent / "update.log",
+                                  relaunch.name if relaunch else ""), encoding="utf-8")
     # Detached: it waits for this program to exit, swaps the folders, then restarts the server.
     proc.start_detached(["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-WindowStyle", "Hidden",
                          "-File", str(script)])

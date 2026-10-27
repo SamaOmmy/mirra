@@ -52,15 +52,13 @@ def run() -> int:
     # HTTPS
     if st and cfg:
         if not tailscale.https_enabled(st):
-            _check(r, WARN, "HTTPS (for installing as an app)", "not enabled on your tailnet",
-                   f"Enable it at {tailscale.ADMIN_DNS_URL}, then run `samantha-mirror setup`. The app still works in the browser.")
+            _check(r, OK, "HTTPS (only for the iPhone browser page)", "not enabled on your tailnet (optional)")
         else:
             url = tailscale.https_url(st, cfg.port)
             if url and cfg.loopback:
-                _check(r, OK, "HTTPS (for installing as an app)", url)
+                _check(r, OK, "HTTPS (only for the iPhone browser page)", url)
             else:
-                _check(r, WARN, "HTTPS (for installing as an app)", "available but not set up",
-                       "Run `samantha-mirror setup` and say yes to HTTPS.")
+                _check(r, OK, "HTTPS (only for the iPhone browser page)", "available, not set up (optional)")
 
     # Capture
     try:
@@ -110,8 +108,8 @@ def run() -> int:
 
     # Android phone on this PC (optional)
     from .server import PHONE_APP
-    _check(r, OK, "Phone on this PC (Android, optional)",
-           "the phone app is included" if PHONE_APP.exists() else "this copy has no phone app (see the README to build it)")
+    _check(r, OK, "Android app (phones update from here)",
+           "included" if PHONE_APP.exists() else "not in this copy (phones get it from the Releases page)")
 
     try:
         newer = updater.available()

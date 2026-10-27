@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from "react";
 import { api, type MonitorsResponse, type ServerState, type Settings as S } from "./api";
 import Devices from "./Devices";
 import Help from "./Help";
-import PhoneSetup from "./PhoneSetup";
 import { unlockAudio, type AudioPref, type AudioStatus } from "./useAudio";
 
 const PRESETS: { name: string; hint: string; values: Pick<S, "fps" | "quality" | "scale"> }[] = [
@@ -109,7 +108,6 @@ export default function Settings({ onClose, onSignOut, current, server, audio, a
             </p>
           </>
         )}
-        <PhoneSetup />
         <Devices />
         {server?.update && (
           <p className="update-note">

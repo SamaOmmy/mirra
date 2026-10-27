@@ -1,21 +1,31 @@
 # Changelog
 
-## Unreleased
+## 0.5.0
+
+Two apps, both ways: **Samantha** on the PC and **Samantha** on Android.
 
 New
-- **Sound from the PC on the phone.** Off by default. Switch it on per phone in Settings > Sound; *Use less data*
-  makes it mono at half the rate. The PC only records while someone listens; `SM_AUDIO=0` forbids it. Windows only
-  (uses the speakers' loopback).
-- **Your Android phone on the PC, with control.** A small companion app, *Samantha Phone*, lets the PC show the phone
-  and tap, swipe and type on it. No Developer options and no cable: you install the app from your own PC's Samantha
-  page, pair it and switch on one Accessibility permission, once. It uses Accessibility screenshots instead of screen
-  recording, so Android never asks "start recording?" again (slower: a few pictures per second). The phone connects out
-  to the PC and listens for nothing; the PC page is `/phone` (`samantha-mirror phone` opens it). The app is built with
-  the plain Android SDK tools (`python android/build.py`) and ships inside the download.
-- `doctor` reports on sound and on the phone app.
+- **The Samantha window on the PC** (`Samantha.exe`, the shortcuts open it). First-time setup, on/off, connecting a
+  phone, seeing and using your Android phone, sound, signing out all phones and updates are all in one window. No
+  console, no commands. Your old Desktop, Start Menu and pinned taskbar shortcuts are pointed at it automatically.
+- **The Samantha app for Android** shows your PC (full screen, pinch to zoom, landscape with a Rotate button, quality
+  presets, screen picker, screenshots) and plays the PC's sound if you switch it on. The same app lets the PC see and
+  use the phone (one Accessibility permission, granted once; never a "start recording?" question). No browser needed.
+- **Pairing with a code.** The Samantha window shows the PC's address and a 6-digit code (valid 10 minutes); type
+  them into the phone app. No QR codes or tokens to copy.
+- **Sound from the PC on the phone.** Off by default; each phone switches it on in its app. The PC records nothing
+  while nobody listens, and Settings in the Samantha window can forbid it (`SM_AUDIO=0`).
+- **Updates for both apps.** The window says when a new version is out and installs it with one click (then reopens).
+  After the PC updates, the phone app offers the matching version from the PC; Android asks once to allow it.
+- **Faster phone picture on the PC**: about 3 pictures a second instead of 2 (the upload of one overlaps taking the next).
+- The Android app is also its own download on the Releases page (`SamanthaPhone.apk`).
 
 Changes
-- The server now allows two streams per viewer (picture and sound), so up to `2 x SM_MAX_CLIENTS + 4` threads.
+- The browser page stays only for iPhones and other browsers (Settings > iPhone or a web browser in the window).
+  Its Android setup section and the `/phone` page are gone, and so is `samantha-mirror phone`.
+- Double-clicking `samantha-mirror.exe` opens the window. The command line still works for everything.
+- `doctor` treats HTTPS as optional (only the iPhone browser page uses it) and reports the included Android app.
+- The server allows two streams per viewer (picture and sound), so up to `2 x SM_MAX_CLIENTS + 4` threads.
 
 ## 0.4.1
 

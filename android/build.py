@@ -120,7 +120,7 @@ def main():
             "--version-name", name, "--java", gen, compiled)
 
         sources = [str(p) for p in list((HERE / "src").rglob("*.java")) + list(gen.rglob("*.java"))]
-        run(find_jdk_tool("javac"), "--release", "17", "-Xlint:-options", "-classpath", android_jar, "-d", classes, *sources)
+        run(find_jdk_tool("javac"), "--release", "17", "-encoding", "UTF-8", "-Xlint:-options", "-classpath", android_jar, "-d", classes, *sources)
         class_files = [str(p) for p in classes.rglob("*.class")]
         run(tool(build_tools, "d8"), "--release", "--min-api", MIN_SDK, "--lib", android_jar, "--output", dex, *class_files)
 

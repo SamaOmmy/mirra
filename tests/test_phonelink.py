@@ -7,7 +7,7 @@ import time
 import pytest
 from waitress import create_server
 
-from samantha_mirror import phonelink, server
+from samantha_mirror import __version__, phonelink, server
 from samantha_mirror.phonelink import BadInput, PhoneHub, parse_input
 from samantha_mirror.server import create_app
 from tests.conftest import TOKEN
@@ -157,7 +157,8 @@ def test_every_phone_endpoint_needs_the_token(cfg):
     srv = _serve(cfg, PhoneHub())
     port = srv.effective_port
     try:
-        for method, path in [("GET", "/api/phone/state"), ("GET", "/api/phone/pair"), ("GET", "/api/phone/app.apk"),
+        for method, path in [("GET", "/api/phone/state"), ("GET", "/api/pair/code"), ("POST", "/api/pair/code"),
+                             ("DELETE", "/api/pair/code"), ("GET", "/api/phone/app.apk"),
                              ("POST", "/api/phone/hello"), ("GET", "/api/phone/commands"), ("POST", "/api/phone/frame"),
                              ("GET", "/api/phone/stream"), ("POST", "/api/phone/input")]:
             assert _call(port, method, path, {} if method == "POST" else None)[0] == 401, path
@@ -165,10 +166,11 @@ def test_every_phone_endpoint_needs_the_token(cfg):
         srv.close()
 
 
-def test_the_phone_page_itself_is_public_like_the_rest_of_the_app(cfg):
+def test_the_old_browser_page_for_the_phone_is_gone(cfg):
     srv = _serve(cfg, PhoneHub())
     try:
-        assert _call(srv.effective_port, "GET", "/phone")[0] in (200, 500)   # 500 only if the web app is not built
+        assert _call(srv.effective_port, "GET", "/phone")[0] == 404
+        assert _call(srv.effective_port, "GET", "/api/phone/pair", headers=BEARER)[0] == 404
     finally:
         srv.close()
 
@@ -180,7 +182,9 @@ def test_a_whole_session_over_http(cfg):
     try:
         status, body = _call(port, "POST", "/api/phone/hello", {"device": "Pixel 8", "version": "0.5.0", "control": True,
                                                                 "width": 1080, "height": 2400}, BEARER)
-        assert status == 200 and json.loads(body)["poll"] == phonelink.POLL_SECONDS
+        answer = json.loads(body)
+        assert status == 200 and answer["poll"] == phonelink.POLL_SECONDS
+        assert answer["version"] == __version__ and answer["pc"]   # the app shows the PC's name and offers updates
         assert json.loads(_call(port, "GET", "/api/phone/commands", headers=BEARER)[1]) == [{"t": "watch", "on": False}]
 
         state = json.loads(_call(port, "GET", "/api/phone/state", headers=BEARER)[1])
@@ -230,10 +234,34 @@ def test_input_without_a_phone_is_refused_clearly(cfg):
         srv.close()
 
 
-def test_pairing_hands_the_token_only_to_someone_who_has_it(cfg):
+def test_pairing_by_code_over_http(cfg):
     srv = _serve(cfg, PhoneHub())
+    port = srv.effective_port
     try:
-        assert json.loads(_call(srv.effective_port, "GET", "/api/phone/pair", headers=BEARER)[1]) == {"token": TOKEN}
+        assert _call(port, "POST", "/api/pair", {"code": "123456"})[0] == 403          # no code shown yet
+        status, body = _call(port, "POST", "/api/pair/code", {}, BEARER)
+        code = json.loads(body)["code"]["code"]
+        assert status == 200 and len(code) == 6
+        assert json.loads(_call(port, "GET", "/api/pair/code", headers=BEARER)[1])["code"]["code"] == code
+        status, body = _call(port, "POST", "/api/pair", {"code": code[:3] + " " + code[3:], "device": "Pixel 8"})
+        answer = json.loads(body)
+        assert status == 200 and answer["token"] == TOKEN and answer["version"] == __version__
+        paired = json.loads(_call(port, "GET", "/api/pair/code", headers=BEARER)[1])["paired"]
+        assert paired[-1]["device"] == "Pixel 8"
+        assert _call(port, "DELETE", "/api/pair/code", headers=BEARER)[0] == 200
+        assert _call(port, "POST", "/api/pair", {"code": code})[0] == 403             # cancelled
+        assert _call(port, "POST", "/api/pair", "not an object")[0] == 403
+    finally:
+        srv.close()
+
+
+def test_wrong_codes_count_towards_the_lockout(cfg):
+    srv = _serve(cfg, PhoneHub())
+    port = srv.effective_port
+    try:
+        for _ in range(10):
+            _call(port, "POST", "/api/pair", {"code": "000000"})
+        assert _call(port, "GET", "/api/state", headers=BEARER)[0] == 429   # even the right token, from this address
     finally:
         srv.close()
 

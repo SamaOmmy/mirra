@@ -12,17 +12,14 @@ export default function Help({ compact = false }: { compact?: boolean }) {
         <>
           <h3>How do I sign in?</h3>
           <p className="muted">
-            This phone shows your <strong>PC's screen</strong>, so the sign-in code lives on the PC:
+            <strong>Android phone?</strong> Use the Samantha app instead of this page: on your PC, open Samantha. Its
+            Home page has the download and a code to connect.
           </p>
+          <p className="muted">On an iPhone or in another browser, the sign-in code lives on the PC:</p>
           <ol>
             <li>
-              <strong>On your PC</strong>, double-click <strong>samantha-mirror.exe</strong> (the program you installed).
-              A window opens and shows a <strong>QR code</strong>.
-              <br />
-              <span className="muted small">
-                Installed with the PowerShell script instead? Open PowerShell in the project folder and run{" "}
-                <code>.\.venv\Scripts\samantha-mirror link</code>
-              </span>
+              <strong>On your PC</strong>, open <strong>Samantha</strong>, go to <strong>Settings</strong> and choose{" "}
+              <strong>Show the link</strong> (under <em>iPhone or a web browser</em>). It shows a <strong>QR code</strong>.
             </li>
             <li>
               <strong>On this phone</strong>, open the camera and point it at the QR code on the PC screen. Tap the link

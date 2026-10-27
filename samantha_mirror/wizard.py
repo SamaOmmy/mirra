@@ -75,12 +75,11 @@ def phone_instructions(url: str, https: bool) -> None:
     say(f"       Android: {tailscale.PLAY_STORE_URL}")
     say(f"       iPhone:  {tailscale.APP_STORE_URL}")
     say("  2. Make sure Tailscale is switched on in the phone.")
-    say("  3. Point the phone camera at the QR code above (it is on THIS computer screen) and tap the link.")
-    say("     It signs you in. No camera? Open the link, or type the token from your settings file.")
+    say("  3. Android: use the Samantha app. Open Samantha on this PC (the Samantha shortcut, or")
+    say("     `samantha-mirror app`): its Home page has the app download and a code to connect.")
+    say("     iPhone (or any browser): point the camera at the QR code above and tap the link. It signs you in.")
     if https:
-        say("  4. Install it as an app: browser menu > Install app (Android), or Share > Add to Home Screen (iPhone).")
-    else:
-        say("  4. Optional: Add to Home Screen. (Full app install needs HTTPS, see `samantha-mirror setup` again.)")
+        say("     Then Share > Add to Home Screen.")
 
 
 def best_url(cfg: config.Config, st: dict | None = None) -> tuple[str, bool]:

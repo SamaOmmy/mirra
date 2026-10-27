@@ -1,9 +1,10 @@
 """Flask app.
 
-Public: the web app's own files (no secrets in them) and POST /api/login.
-Everything else (/stream, /api/*) needs the token.
+Public: the browser viewer's own files (no secrets in them), POST /api/login and POST /api/pair (a phone app trading
+the code shown on the PC for the token). Everything else (/stream, /api/*) needs the token.
 """
 import io
+import socket
 from pathlib import Path
 
 import mss
@@ -15,12 +16,13 @@ from .audio import AudioError, AudioSource, to_low_data
 from .auth import COOKIE, Auth
 from .capture import FrameSource
 from .config import LIMITS, Config
+from .pairing import Pairing
 from .phonelink import MAX_FRAME, POLL_SECONDS, BadInput, PhoneHub, parse_input
 
 BOUNDARY = "frame"
 COOKIE_MAX_AGE = 30 * 24 * 3600
 WEB_DIR = Path(__file__).resolve().parent / "web"
-PUBLIC_ENDPOINTS = {"index", "phone_page", "static", "login"}
+PUBLIC_ENDPOINTS = {"index", "static", "login", "pair"}
 PHONE_APP = Path(__file__).resolve().parent / "phone_app" / "SamanthaPhone.apk"
 
 
@@ -60,10 +62,12 @@ def _parse_settings(data, monitor_count):
     return changes, None
 
 
-def create_app(cfg: Config, sound: AudioSource | None = None, phone: PhoneHub | None = None) -> Flask:
+def create_app(cfg: Config, sound: AudioSource | None = None, phone: PhoneHub | None = None,
+               pairing: Pairing | None = None) -> Flask:
     app = Flask(__name__, static_folder=str(WEB_DIR), static_url_path="")
     app.config["MAX_CONTENT_LENGTH"] = MAX_FRAME + 4096
     phone = phone or PhoneHub()
+    pairing = pairing or Pairing()
     auth = Auth(cfg.token)
     sound = sound or AudioSource(enabled=cfg.audio)
     source = FrameSource(cfg.monitor, cfg.fps, cfg.jpeg_quality, cfg.scale, cfg.cursor, cfg.capture)
@@ -123,11 +127,6 @@ def create_app(cfg: Config, sound: AudioSource | None = None, phone: PhoneHub | 
                             status=500, mimetype="text/plain")
         return send_from_directory(WEB_DIR, "index.html")
 
-    @app.get("/phone")
-    def phone_page():
-        """The page that shows and controls the phone: the same web app, which looks at the address."""
-        return index()
-
     @app.post("/api/login")
     def login():
         data = request.get_json(silent=True) or {}
@@ -147,8 +146,8 @@ def create_app(cfg: Config, sound: AudioSource | None = None, phone: PhoneHub | 
     @app.get("/api/state")
     def state():
         # Polled by the page: its frame counters show whether the stream is stuck.
-        return jsonify(source.state() | {"settings": source.settings(), "version": __version__,
-                                                    "update": updater.cached_info(), "audio": sound.state()})
+        return jsonify(source.state() | {"settings": source.settings(), "version": __version__, "pc": socket.gethostname(),
+                                         "update": updater.cached_info(), "audio": sound.state()})
 
     @app.get("/api/monitors")
     def monitors():
@@ -260,15 +259,34 @@ def create_app(cfg: Config, sound: AudioSource | None = None, phone: PhoneHub | 
         resp.headers["X-Accel-Buffering"] = "no"
         return resp
 
-    # -- Android phone: companion app <-> relay <-> this PC's page -------------------------------
+    # -- pairing the phone app: the Samantha window shows a code, the phone sends it back ---------------
+    @app.post("/api/pair")
+    def pair():
+        data = request.get_json(silent=True)
+        data = data if isinstance(data, dict) else {}
+        device = str(data.get("device", ""))[:80]
+        if not pairing.claim(data.get("code"), device):
+            auth.record_failure(client_ip())
+            return jsonify(error="That code is wrong or has run out. Get a new one in Samantha on the PC."), 403
+        return jsonify(token=cfg.token, pc=socket.gethostname(), version=__version__)
+
+    @app.get("/api/pair/code")
+    def pair_code():
+        return jsonify(code=pairing.current(), paired=pairing.recent())
+
+    @app.post("/api/pair/code")
+    def pair_new_code():
+        return jsonify(code=pairing.new_code(), paired=pairing.recent())
+
+    @app.delete("/api/pair/code")
+    def pair_cancel():
+        pairing.cancel()
+        return jsonify(ok=True)
+
+    # -- Android phone: phone app <-> relay <-> the Samantha window on this PC -----------------------
     @app.get("/api/phone/state")
     def phone_state():
         return jsonify(phone.state() | {"app_available": PHONE_APP.exists()})
-
-    @app.get("/api/phone/pair")
-    def phone_pair():
-        """What the phone app needs to link up with this PC. Sent only to a device that already has the token."""
-        return jsonify(token=cfg.token)
 
     @app.get("/api/phone/app.apk")
     def phone_app():
@@ -288,7 +306,9 @@ def create_app(cfg: Config, sound: AudioSource | None = None, phone: PhoneHub | 
             if type(data.get(key)) is int and 0 < data[key] < 20000:
                 info[key] = data[key]
         phone.hello(info)
-        return jsonify(ok=True, poll=POLL_SECONDS)
+        # The PC carries the phone app of its own version: the app offers to update itself from here.
+        return jsonify(ok=True, poll=POLL_SECONDS, pc=socket.gethostname(), version=__version__,
+                       app_version=__version__ if PHONE_APP.exists() else None)
 
     @app.get("/api/phone/commands")
     def phone_commands():

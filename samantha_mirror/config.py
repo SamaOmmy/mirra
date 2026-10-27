@@ -14,6 +14,7 @@ from dotenv import load_dotenv
 
 ROOT = Path(__file__).resolve().parent.parent
 MIN_TOKEN_LEN = 16
+DEFAULT_PORT = 8787   # the phone app assumes this port when none is typed
 
 
 def data_dir() -> Path:
@@ -131,7 +132,7 @@ def load() -> Config:
         )
     return Config(
         token=token,
-        port=_num("SM_PORT", 8787, int, 1024, 65535),
+        port=_num("SM_PORT", DEFAULT_PORT, int, 1024, 65535),
         monitor=_num("SM_MONITOR", 1, int, 0, 32),
         fps=_num("SM_FPS", 30, int, *LIMITS["fps"]),
         jpeg_quality=_num("SM_JPEG_QUALITY", 70, int, *LIMITS["quality"]),

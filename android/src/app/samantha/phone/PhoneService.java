@@ -27,7 +27,6 @@ import org.json.JSONObject;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.net.URI;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.CountDownLatch;
@@ -46,14 +45,17 @@ import java.util.concurrent.TimeUnit;
 public class PhoneService extends AccessibilityService {
     static volatile PhoneService instance;
     static volatile String status = "Not running";
+    private static final String PAUSED = "Paused. The PC cannot see or use this phone.";
 
     private static final String CHANNEL = "watching";
     private static final int SHORT_SIDE = 720;        // screenshots are shrunk to this many pixels on the short side
     private static final int JPEG_QUALITY = 55;
-    private static final long MIN_INTERVAL_MS = 120;  // Android itself allows about 3 screenshots a second
+    private static final long MIN_INTERVAL_MS = 340;  // Android allows one screenshot every 333 ms
 
     private final Handler main = new Handler(Looper.getMainLooper());
     private final ExecutorService shots = Executors.newSingleThreadExecutor();
+    private final ExecutorService uploads = Executors.newSingleThreadExecutor();
+    private final java.util.concurrent.atomic.AtomicBoolean uploading = new java.util.concurrent.atomic.AtomicBoolean();
     private volatile boolean running;
     private volatile boolean watching;
     private Thread linkThread;
@@ -92,17 +94,24 @@ public class PhoneService extends AccessibilityService {
     private void shutdown() {
         running = false;
         setWatching(false);
-        if (instance == this) instance = null;
-        status = "Not running";
+        if (instance == this) {
+            instance = null;
+            status = "Not running";
+        }
         if (linkThread != null) linkThread.interrupt();
         shots.shutdownNow();
+        uploads.shutdownNow();
     }
 
     /** The UI changed a switch: tell the PC and apply it now. */
     static void settingsChanged() {
         PhoneService s = instance;
         if (s == null) return;
-        if (s.prefs.paused()) s.setWatching(false);
+        if (s.prefs.paused()) {
+            s.setWatching(false);
+            s.report(PAUSED);
+            if (s.linkThread != null) s.linkThread.interrupt();   // end the waiting request now, not in 25 seconds
+        }
         new Thread(() -> {
             try {
                 s.hello(s.prefs.server(), s.prefs.token());
@@ -117,12 +126,12 @@ public class PhoneService extends AccessibilityService {
         long backoff = 2000;
         while (running) {
             if (!prefs.paired()) {
-                status = "Not paired with a PC yet.";
+                report("Not paired with a PC yet.");
                 if (!pause(1500)) return;
                 continue;
             }
             if (prefs.paused()) {
-                status = "Paused. The PC cannot see or use this phone.";
+                report(PAUSED);
                 setWatching(false);
                 if (!pause(1500)) return;
                 continue;
@@ -131,23 +140,32 @@ public class PhoneService extends AccessibilityService {
             final String token = prefs.token();
             try {
                 hello(base, token);
-                status = "Connected to " + hostOf(base) + ".";
+                report("Connected to " + prefs.pcLabel() + ".");
                 backoff = 2000;
                 while (running && !prefs.paused() && base.equals(prefs.server()) && token.equals(prefs.token())) {
-                    byte[] data = Http.request("GET", base + "/api/phone/commands", token, null, null, null, 45000);
+                    byte[] data = Net.request("GET", base + "/api/phone/commands", token, null, null, null, 45000);
                     JSONArray commands = new JSONArray(new String(data));
                     for (int i = 0; i < commands.length(); i++) handle(commands.getJSONObject(i));
                 }
-            } catch (Http.Error e) {
-                status = e.getMessage();
+            } catch (Net.Error e) {
+                report(e.getMessage());
                 if (e.code == 401) backoff = 15000;
             } catch (IOException | JSONException e) {
-                status = "Can't reach the PC (" + e.getMessage() + "). Trying again...";
+                report(Net.explain(e) + " Trying again...");
             }
             setWatching(false);
             if (!pause(backoff)) return;
             backoff = Math.min(backoff * 2, 15000);
         }
+    }
+
+    /**
+     * Sets the line the app shows. Only the running service may: when Android restarts the service, the old one's
+     * thread stops with an error that must not overwrite what the new one says.
+     */
+    private void report(String text) {
+        if (!running || instance != this) return;
+        status = prefs.paused() ? PAUSED : text;
     }
 
     private boolean pause(long ms) {
@@ -172,15 +190,11 @@ public class PhoneService extends AccessibilityService {
         } catch (Exception e) {
             throw new IOException(e);
         }
-        Http.request("POST", base + "/api/phone/hello", token, info.toString().getBytes(), "application/json", null, 8000);
-    }
-
-    private static String hostOf(String base) {
+        byte[] answer = Net.request("POST", base + "/api/phone/hello", token, info.toString().getBytes(), "application/json", null, 8000);
         try {
-            String host = URI.create(base).getHost();
-            return host == null ? base : host;
-        } catch (RuntimeException e) {
-            return base;
+            prefs.setPc(new JSONObject(new String(answer, "UTF-8")).optString("pc", ""));
+        } catch (JSONException ignored) {
+            // an older PC: it does not say its name
         }
     }
 
@@ -195,7 +209,7 @@ public class PhoneService extends AccessibilityService {
             try {
                 perform(type, c);
             } catch (Exception e) {
-                status = "Could not do that: " + e.getMessage();
+                report("Could not do that: " + e.getMessage());
             }
         });
     }
@@ -220,14 +234,25 @@ public class PhoneService extends AccessibilityService {
     private void captureLoop() {
         while (running && watching && !prefs.paused()) {
             long started = SystemClock.elapsedRealtime();
-            try {
-                Frame frame = grab();
-                if (frame != null) upload(frame);
-                if (wakeLock != null && !wakeLock.isHeld()) wakeLock.acquire(30 * 60 * 1000L);
-            } catch (IOException e) {
-                status = "Could not send the screen to the PC (" + e.getMessage() + ").";
-                if (!pause(1000)) return;
+            Frame frame = grab();
+            // Send it while the next one is taken (skip a picture rather than queue them if the network is slow).
+            if (frame != null && uploading.compareAndSet(false, true)) {
+                try {
+                    uploads.execute(() -> {
+                        try {
+                            upload(frame);
+                        } catch (IOException e) {
+                            report("Could not send the screen to the PC: " + Net.explain(e));
+                            pause(1000);
+                        } finally {
+                            uploading.set(false);
+                        }
+                    });
+                } catch (java.util.concurrent.RejectedExecutionException e) {
+                    return;   // shutting down
+                }
             }
+            if (wakeLock != null && !wakeLock.isHeld()) wakeLock.acquire(30 * 60 * 1000L);
             long spent = SystemClock.elapsedRealtime() - started;
             if (spent < MIN_INTERVAL_MS && !pause(MIN_INTERVAL_MS - spent)) return;
         }
@@ -306,7 +331,7 @@ public class PhoneService extends AccessibilityService {
         Map<String, String> headers = new HashMap<>();
         headers.put("X-Width", String.valueOf(frame.width));
         headers.put("X-Height", String.valueOf(frame.height));
-        Http.request("POST", prefs.server() + "/api/phone/frame", prefs.token(), frame.jpeg, "image/jpeg", headers, 8000);
+        Net.request("POST", prefs.server() + "/api/phone/frame", prefs.token(), frame.jpeg, "image/jpeg", headers, 8000);
     }
 
     private void showNotification(boolean on) {
@@ -319,7 +344,7 @@ public class PhoneService extends AccessibilityService {
         Notification n = new Notification.Builder(this, CHANNEL)
                 .setSmallIcon(R.drawable.ic_notify)
                 .setContentTitle("Your PC is viewing this phone")
-                .setContentText("Samantha Phone is sharing this screen with " + hostOf(prefs.server()) + ".")
+                .setContentText("Samantha is sharing this screen with " + prefs.pcLabel() + ".")
                 .setOngoing(true)
                 .build();
         nm.notify(1, n);

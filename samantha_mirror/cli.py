@@ -1,4 +1,4 @@
-"""Command line: samantha-mirror [run|setup|link|doctor|start|stop|phone|autostart|update|uninstall]"""
+"""Command line: samantha-mirror [app|run|setup|link|doctor|start|stop|autostart|update|uninstall]"""
 import argparse
 import sys
 
@@ -15,7 +15,18 @@ def _utf8_console() -> None:
 
 
 def _double_clicked() -> int:
-    """Packaged .exe opened by double-click: set up the first time, show the phone link afterwards."""
+    """Packaged console .exe opened by double-click: open the Samantha window instead (older shortcuts point here)."""
+    from . import shortcuts
+    window = shortcuts.window_exe()
+    if window:
+        from . import proc
+        proc.start_detached([str(window)])
+        return 0
+    return _console_setup()
+
+
+def _console_setup() -> int:
+    """No window program next to us: set up the first time, show the phone link afterwards."""
     from . import autostart, config
     from .wizard import setup, show_link
     configured = config.env_path().exists() and autostart.status() != "missing"
@@ -33,8 +44,6 @@ def _double_clicked() -> int:
     if configured and autostart.status() == "disabled":
         print("Note: the server is stopped on purpose. Run `samantha-mirror start` in this folder to turn it back on.\n")
     code = show_link() if configured else setup()
-    if configured:
-        print("\nAndroid phone? To see it on this PC and use it with your mouse and keyboard, run: samantha-mirror phone")
     try:
         input("\nPress Enter to close this window...")
     except EOFError:
@@ -47,6 +56,7 @@ def main(argv=None) -> int:
     p = argparse.ArgumentParser(prog="samantha-mirror", description=f"{APP_NAME}: see your PC screen on your phone, over Tailscale.")
     p.add_argument("--version", action="version", version=f"{APP_NAME} {__version__}")
     sub = p.add_subparsers(dest="cmd")
+    sub.add_parser("app", help="open the Samantha window")
     sub.add_parser("run", help="start the server (default)")
     s = sub.add_parser("setup", help="guided first-time setup")
     s.add_argument("-y", "--yes", action="store_true", help="accept the defaults without asking")
@@ -59,8 +69,6 @@ def main(argv=None) -> int:
     u.add_argument("-y", "--yes", action="store_true", help="install without asking")
     sub.add_parser("stop", help="stop the server and keep it stopped (until you run `start`)")
     sub.add_parser("start", help="start the server again (and let it start at logon)")
-    ph = sub.add_parser("phone", help="open the page that shows your Android phone on this PC and lets you control it")
-    ph.add_argument("--url", action="store_true", help="only print the address of the page")
     sub.add_parser("uninstall", help="remove autostart and the HTTPS setup (keeps your settings)")
 
     args = p.parse_args(argv)
@@ -68,6 +76,9 @@ def main(argv=None) -> int:
         return _double_clicked()  # the packaged .exe was opened with no command
     cmd = args.cmd or "run"
 
+    if cmd == "app":
+        from .desktop import main as window
+        return window()
     if cmd == "run":
         from .runner import run_server
         return run_server()
@@ -111,9 +122,6 @@ def main(argv=None) -> int:
             return 1
         print("Started. It will also start at every logon again.")
         return 0
-    if cmd == "phone":
-        from .phonepage import open_phone_page
-        return open_phone_page(only_print=args.url)
     if cmd == "update":
         from .updater import run_update
         return run_update(args.check, args.yes)

@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "samantha-screen-mirror"
-version = "0.4.1"
-description = "View your Windows PC screen live on your phone, privately over Tailscale. No cloud."
+version = "0.5.0"
+description = "Your Windows PC on your phone and your Android phone on your PC, privately over Tailscale. No cloud."
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
@@ -28,11 +28,14 @@ dev = ["pytest>=8", "ruff>=0.5"]
 [project.scripts]
 samantha-mirror = "samantha_mirror.cli:main"
 
+[project.gui-scripts]
+samantha = "samantha_mirror.desktop:main"
+
 [tool.setuptools]
 packages = ["samantha_mirror"]
 
 [tool.setuptools.package-data]
-samantha_mirror = ["web/*", "web/assets/*", "phone_app/*.apk"]
+samantha_mirror = ["web/*", "web/assets/*", "phone_app/*.apk", "app.ico"]
 
 [tool.ruff]
 line-length = 120

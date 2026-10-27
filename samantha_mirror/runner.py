@@ -18,7 +18,7 @@ import time
 import mss
 from waitress import create_server
 
-from . import config, tailscale, updater
+from . import config, shortcuts, tailscale, updater
 from .server import create_app
 
 TAILSCALE_POLL = 10        # seconds between looks for the Tailscale address while it is not up
@@ -181,4 +181,13 @@ def run_server() -> int:
              cfg.monitor, m["width"], m["height"], cfg.fps, cfg.jpeg_quality, cfg.scale)
     if cfg.update_check:
         updater.start_background_check()
+    # After an update from a version without the Samantha window: point its old shortcuts at the window.
+    threading.Thread(target=_fix_shortcuts, name="shortcuts", daemon=True).start()
     return serve_forever(cfg)
+
+
+def _fix_shortcuts() -> None:
+    try:
+        shortcuts.update()
+    except Exception as exc:
+        log.warning("could not update the shortcuts: %s", exc)

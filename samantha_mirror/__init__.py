@@ -1,4 +1,4 @@
-"""Samantha Screen Mirror: view your Windows PC screen from your phone, over Tailscale."""
+"""Samantha Screen Mirror: your Windows PC on your phone, and your Android phone on your PC, over Tailscale."""
 
-__version__ = "0.4.1"
+__version__ = "0.5.0"
 APP_NAME = "Samantha Screen Mirror"

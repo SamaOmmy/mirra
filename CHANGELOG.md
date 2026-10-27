@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.1
+
+Fixes
+- **Mirra Setup could not install Mirra** ("Could not install: Mirra.apk"): the app inside Setup was packed
+  under its old name.
+
 ## 0.6.0: Mirra
 
 Samantha Screen Mirror is now **Mirra**, with a new logo, a new look and much more.

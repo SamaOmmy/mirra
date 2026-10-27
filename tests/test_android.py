@@ -5,6 +5,7 @@ and the Android SDK.
 """
 import io
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -61,8 +62,11 @@ def test_the_android_app_builds_and_is_a_valid_signed_apk(tmp_path):
     assert "classes.dex" in names and "AndroidManifest.xml" in names
     assert any(n.startswith("META-INF/") for n in names)   # signed
     # Samantha Setup carries this very app and installs it (so Android 13+ does not restrict it)
+    # ... under the name its code opens (a mismatch broke 0.6.0's Setup)
+    opened = re.search(r'getAssets\(\)\.open\("([^"]+)"\)',
+                       (ANDROID / "setup/src/app/samantha/setup/SetupActivity.java").read_text(encoding="utf-8")).group(1)
     with zipfile.ZipFile(out.with_name("SamanthaSetup.apk")) as setup:
-        assert setup.read("assets/Samantha.apk") == out.read_bytes()
+        assert setup.read(f"assets/{opened}") == out.read_bytes()
         assert any(n.startswith("META-INF/") for n in setup.namelist())
 
 

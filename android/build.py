@@ -27,6 +27,7 @@ HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent
 OUT = Path(os.environ.get("SM_APK_OUT") or ROOT / "samantha_mirror" / "phone_app" / "SamanthaPhone.apk")
 SETUP_OUT = OUT.with_name("SamanthaSetup.apk")
+SETUP_ASSET = "Mirra.apk"   # the name SetupActivity opens
 MIN_SDK, TARGET_SDK = 30, 34   # 30: the first Android with accessibility screenshots
 
 
@@ -157,7 +158,7 @@ def main():
 
     build_apk(build_tools, android_jar, name, HERE, OUT)
     with tempfile.TemporaryDirectory(prefix="samantha-setup-assets-") as assets:
-        shutil.copy(OUT, Path(assets) / "Samantha.apk")   # Setup installs this copy
+        shutil.copy(OUT, Path(assets) / SETUP_ASSET)   # Setup installs this copy
         build_apk(build_tools, android_jar, name, HERE / "setup", SETUP_OUT,
                   extra_res=[HERE / "res" / "drawable" / f"{n}.xml" for n in
                              ("ic_launcher_background", "ic_launcher_foreground", "ic_launcher_monochrome", "logo")]

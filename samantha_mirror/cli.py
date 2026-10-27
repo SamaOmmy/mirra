@@ -15,7 +15,7 @@ def _utf8_console() -> None:
 
 
 def _double_clicked() -> int:
-    """Packaged console .exe opened by double-click: open the Samantha window instead (older shortcuts point here)."""
+    """Packaged console .exe opened by double-click: open the Mirra window instead (older shortcuts point here)."""
     from . import shortcuts
     window = shortcuts.window_exe()
     if window:
@@ -56,7 +56,7 @@ def main(argv=None) -> int:
     p = argparse.ArgumentParser(prog="samantha-mirror", description=f"{APP_NAME}: see your PC screen on your phone, over Tailscale.")
     p.add_argument("--version", action="version", version=f"{APP_NAME} {__version__}")
     sub = p.add_subparsers(dest="cmd")
-    sub.add_parser("app", help="open the Samantha window")
+    sub.add_parser("app", help="open the Mirra window")
     sub.add_parser("run", help="start the server (default)")
     s = sub.add_parser("setup", help="guided first-time setup")
     s.add_argument("-y", "--yes", action="store_true", help="accept the defaults without asking")

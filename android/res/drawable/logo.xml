@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- written by packaging/make_logo.py -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="96dp" android:height="96dp"
+    android:viewportWidth="96" android:viewportHeight="96">
+    <path android:pathData="M21.56,0.00 H74.44 A21.56,21.56 0 0 1 96.00,21.56 V74.44 A21.56,21.56 0 0 1 74.44,96.00 H21.56 A21.56,21.56 0 0 1 0.00,74.44 V21.56 A21.56,21.56 0 0 1 21.56,0.00 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient android:type="linear" android:startX="0" android:startY="0" android:endX="96" android:endY="96">
+                <item android:offset="0" android:color="#FF7C5CFF" />
+                <item android:offset="1" android:color="#FF22D3EE" />
+            </gradient>
+        </aapt:attr>
+    </path>
+    <path android:pathData="M53.06,57.47 H24.38 A3.47,3.47 0 0 1 20.91,54.00 V31.31 A3.47,3.47 0 0 1 24.38,27.84 H65.25 A3.47,3.47 0 0 1 68.72,31.31 V37.12" android:strokeColor="#FFFFFFFF" android:strokeWidth="5.06" android:strokeLineCap="butt" android:strokeLineJoin="round" />
+    <path android:pathData="M61.12,42.84 H72.75 A2.34,2.34 0 0 1 75.09,45.19 V72.94 A2.34,2.34 0 0 1 72.75,75.28 H61.12 A2.34,2.34 0 0 1 58.78,72.94 V45.19 A2.34,2.34 0 0 1 61.12,42.84 Z" android:strokeColor="#FFFFFFFF" android:strokeWidth="5.06" android:strokeLineCap="butt" android:strokeLineJoin="round" />
+    <path android:pathData="M39.38,59.62 H50.25 V67.12 H39.38 Z" android:fillColor="#FFFFFFFF" />
+    <path android:pathData="M33.75,66.75 H53.06 V71.25 H33.75 A2.25,2.25 0 0 1 31.50,69.00 V69.00 A2.25,2.25 0 0 1 33.75,66.75 Z" android:fillColor="#FFFFFFFF" />
+    <path android:pathData="M65.16,69.19 H68.72 A1.03,1.03 0 0 1 69.75,70.22 V70.22 A1.03,1.03 0 0 1 68.72,71.25 H65.16 A1.03,1.03 0 0 1 64.12,70.22 V70.22 A1.03,1.03 0 0 1 65.16,69.19 Z" android:fillColor="#FFFFFFFF" />
+</vector>

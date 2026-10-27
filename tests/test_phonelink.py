@@ -135,8 +135,8 @@ def test_pictures_flow_to_the_page():
 
 
 # -- over HTTP -----------------------------------------------------------------------------------
-def _serve(cfg, hub):
-    srv = create_server(create_app(cfg, phone=hub), listen="127.0.0.1:0", threads=8, send_bytes=1)
+def _serve(cfg, hub, pairing=None):
+    srv = create_server(create_app(cfg, phone=hub, pairing=pairing), listen="127.0.0.1:0", threads=8, send_bytes=1)
     threading.Thread(target=srv.run, daemon=True).start()
     time.sleep(0.2)
     return srv
@@ -288,5 +288,25 @@ def test_the_app_is_downloaded_as_an_apk(cfg, monkeypatch, tmp_path):
         assert resp.status == 200 and resp.getheader("Content-Type") == "application/vnd.android.package-archive"
         assert resp.read() == b"PK\x03\x04apk"
         conn.close()
+    finally:
+        srv.close()
+
+
+def test_the_join_page_and_the_setup_download_need_no_token(cfg, monkeypatch, tmp_path):
+    setup = tmp_path / "SamanthaSetup.apk"
+    setup.write_bytes(b"PK\x03\x04setup")
+    monkeypatch.setattr(server, "PHONE_SETUP", setup)
+    from samantha_mirror.pairing import Pairing
+    pairing = Pairing()
+    code = pairing.new_code()["code"]
+    srv = _serve(cfg, PhoneHub(), pairing=pairing)
+    port = srv.effective_port
+    try:
+        status, body = _call(port, "GET", f"/join?c={code}")
+        assert status == 200 and f"code={code}".encode() in body and b"intent://" in body
+        status, body = _call(port, "GET", "/download/setup")
+        assert status == 200 and body == b"PK\x03\x04setup"
+        pairing.cancel()
+        assert b"intent://" not in _call(port, "GET", f"/join?c={code}")[1]   # no live code: no link
     finally:
         srv.close()

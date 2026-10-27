@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "samantha-screen-mirror"
-version = "0.5.2"
-description = "Your Windows PC on your phone and your Android phone on your PC, privately over Tailscale. No cloud."
+version = "0.6.0"
+description = "Mirra: your Windows PC on your phone and your Android phone on your PC, privately over Tailscale. No cloud."
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
@@ -20,6 +20,7 @@ dependencies = [
   "dxcam>=0.3; sys_platform == 'win32'",
   "pyaudiowpatch>=0.2.12; sys_platform == 'win32'",
   "opencv-python-headless>=4.8",
+  "customtkinter==5.2.2",
 ]
 
 [project.optional-dependencies]
@@ -29,13 +30,13 @@ dev = ["pytest>=8", "ruff>=0.5"]
 samantha-mirror = "samantha_mirror.cli:main"
 
 [project.gui-scripts]
-samantha = "samantha_mirror.desktop:main"
+mirra = "samantha_mirror.desktop:main"
 
 [tool.setuptools]
 packages = ["samantha_mirror"]
 
 [tool.setuptools.package-data]
-samantha_mirror = ["web/*", "web/assets/*", "phone_app/*.apk", "app.ico"]
+samantha_mirror = ["web/*", "web/assets/*", "phone_app/*.apk", "assets/*"]
 
 [tool.ruff]
 line-length = 120

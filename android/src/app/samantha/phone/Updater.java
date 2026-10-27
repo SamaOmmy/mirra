@@ -39,7 +39,7 @@ final class Updater {
     /** Android's one-time "allow installs from this app" switch. False after opening it for the user. */
     static boolean mayInstall(Activity a) {
         if (a.getPackageManager().canRequestPackageInstalls()) return true;
-        Toast.makeText(a, "Allow Samantha to install its updates, then tap Update again.", Toast.LENGTH_LONG).show();
+        Toast.makeText(a, "Allow Mirra to install its updates, then tap Update again.", Toast.LENGTH_LONG).show();
         a.startActivity(new Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:" + a.getPackageName())));
         return false;
     }
@@ -81,7 +81,7 @@ final class Updater {
                     c.startActivity(confirm);
                 }
             } else if (status == PackageInstaller.STATUS_FAILURE_CONFLICT || status == PackageInstaller.STATUS_FAILURE_INCOMPATIBLE) {
-                Toast.makeText(c, "This update is signed differently from the installed app. Uninstall Samantha, "
+                Toast.makeText(c, "This update is signed differently from the installed app. Uninstall Mirra, "
                         + "then install it again from the link on your PC.", Toast.LENGTH_LONG).show();
             } else if (status != PackageInstaller.STATUS_SUCCESS && status != PackageInstaller.STATUS_FAILURE_ABORTED) {
                 String why = intent.getStringExtra(PackageInstaller.EXTRA_STATUS_MESSAGE);

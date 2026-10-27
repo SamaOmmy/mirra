@@ -1,4 +1,4 @@
-"""Windowed entry point of the packaged app: the Samantha window (Samantha.exe)."""
+"""Windowed entry point of the packaged app: the Mirra window (Mirra.exe)."""
 import sys
 
 from samantha_mirror.desktop import main

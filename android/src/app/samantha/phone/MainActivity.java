@@ -2,6 +2,7 @@ package app.samantha.phone;
 
 import android.Manifest;
 import android.app.Activity;
+import android.app.AlertDialog;
 import android.content.ComponentName;
 import android.content.Intent;
 import android.net.Uri;
@@ -11,40 +12,45 @@ import android.os.Handler;
 import android.os.Looper;
 import android.provider.Settings;
 import android.text.InputType;
+import android.view.Gravity;
 import android.view.View;
 import android.view.inputmethod.EditorInfo;
 import android.widget.Button;
 import android.widget.EditText;
+import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.Switch;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import org.json.JSONObject;
 
 /**
- * The app's home: pair with the PC (its address and a code from the Samantha window), open the PC's screen,
- * sound, and whether the PC may see and use this phone.
+ * Mirra's home: connect to the PC (scan the QR code on the PC, or type its name and a code), show the PC, sound,
+ * and whether the PC may see and use this phone.
  */
 public class MainActivity extends Activity {
+    static final String SETUP_URL =
+            "https://github.com/SamaOmmy/samantha-screen-mirror/releases/latest/download/Mirra-for-Android-Setup.apk";
     private final Handler main = new Handler(Looper.getMainLooper());
     private Prefs prefs;
     private LinearLayout root;
     private volatile boolean visible;
 
-    // pairing screen
+    // not paired yet
     private EditText addressField, codeField;
     private TextView pairMessage;
     private Button connect;
 
-    // paired screen
-    private TextView pcName, pcStatus, phoneStatus, updateText;
-    private LinearLayout accessOff, restrictedBox, updateCard;
-    static final String SETUP_URL =
-            "https://github.com/SamaOmmy/samantha-screen-mirror/releases/latest/download/SamanthaSetup.apk";
-    private Switch soundSwitch, lowDataSwitch, controlSwitch, pauseSwitch;
+    // paired
+    private TextView pcName, phoneStatus;
+    private LinearLayout pcChipHolder, accessOff, accessOn, restrictedBox;
+    private Switch lowDataSwitch;
+    private View lowDataRow;
     private volatile String online;       // null while unknown, "" when the PC answers, else the problem
     private volatile String pcVersion = "";
+    private String offered = "";          // the update version already offered in a pop-up
     private boolean updating;
 
     @Override
@@ -54,6 +60,13 @@ public class MainActivity extends Activity {
         getWindow().setStatusBarColor(Ui.BG);
         getWindow().setNavigationBarColor(Ui.BG);
         build();
+        handleLink(getIntent());
+    }
+
+    @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        handleLink(intent);
     }
 
     @Override
@@ -61,7 +74,7 @@ public class MainActivity extends Activity {
         super.onResume();
         visible = true;
         main.post(tick);
-        new Thread(this::checkLoop, "samantha-check").start();
+        new Thread(this::checkLoop, "mirra-check").start();
     }
 
     @Override
@@ -71,15 +84,43 @@ public class MainActivity extends Activity {
         super.onPause();
     }
 
+    /** mirra://pair?host=...&port=...&code=... from the page the PC's QR code opens: pair without typing. */
+    private void handleLink(Intent intent) {
+        Uri uri = intent == null ? null : intent.getData();
+        if (uri == null || !"mirra".equals(uri.getScheme())) return;
+        String host = uri.getQueryParameter("host"), port = uri.getQueryParameter("port"), code = uri.getQueryParameter("code");
+        if (host == null || code == null) return;
+        if (prefs.paired()) {
+            prefs.unpair();   // pairing again, possibly with another PC
+            build();
+        }
+        String address = host + (port == null || port.isEmpty() ? "" : ":" + port);
+        if (addressField != null) {
+            addressField.setText(address);
+            codeField.setText(code);
+        }
+        pair(address, code);
+    }
+
     private void build() {
         root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
-        root.setPadding(Ui.dp(this, 20), Ui.dp(this, 28), Ui.dp(this, 20), Ui.dp(this, 40));
-        root.addView(Ui.text(this, "Samantha", 28, Ui.TEXT, true));
-        root.addView(Ui.text(this, "Your PC on this phone, and this phone on your PC.", 14, Ui.MUTED, false));
+        root.setPadding(Ui.dp(this, 20), Ui.dp(this, 24), Ui.dp(this, 20), Ui.dp(this, 40));
+        LinearLayout head = Ui.row(this);
+        ImageView logo = new ImageView(this);
+        logo.setImageResource(R.drawable.logo);
+        head.addView(logo, new LinearLayout.LayoutParams(Ui.dp(this, 44), Ui.dp(this, 44)));
+        LinearLayout titles = new LinearLayout(this);
+        titles.setOrientation(LinearLayout.VERTICAL);
+        titles.setPadding(Ui.dp(this, 14), 0, 0, 0);
+        titles.addView(Ui.text(this, "Mirra", 26, Ui.TEXT, true));
+        titles.addView(Ui.text(this, "Your PC on your phone. Your phone on your PC.", 13, Ui.MUTED, false));
+        head.addView(titles, Ui.weight(1));
+        root.addView(head);
         if (prefs.paired()) buildPaired();
         else buildPairing();
-        TextView version = Ui.text(this, "Samantha for Android " + Updater.installedVersion(this), 12, Ui.MUTED, false);
+        TextView version = Ui.text(this, "Mirra for Android " + Updater.installedVersion(this), 12, Ui.MUTED, false);
+        version.setGravity(Gravity.CENTER_HORIZONTAL);
         version.setPadding(0, Ui.dp(this, 24), 0, 0);
         root.addView(version);
         ScrollView scroll = new ScrollView(this);
@@ -95,10 +136,10 @@ public class MainActivity extends Activity {
         e.setSingleLine();
         e.setInputType(type);
         e.setTextColor(Ui.TEXT);
-        e.setHintTextColor(0xff6b7280);
+        e.setHintTextColor(0xff5d6475);
         e.setTextSize(17);
-        e.setBackground(Ui.round(this, Ui.BG, 10, Ui.LINE));
-        e.setPadding(Ui.dp(this, 14), Ui.dp(this, 12), Ui.dp(this, 14), Ui.dp(this, 12));
+        e.setBackground(Ui.round(this, Ui.BG, 14, Ui.LINE));
+        e.setPadding(Ui.dp(this, 16), Ui.dp(this, 14), Ui.dp(this, 16), Ui.dp(this, 14));
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, -2);
         lp.topMargin = Ui.dp(this, 6);
         e.setLayoutParams(lp);
@@ -113,12 +154,17 @@ public class MainActivity extends Activity {
 
     // -- not paired yet -----------------------------------------------------------------------------
     private void buildPairing() {
+        LinearLayout hero = Ui.hero(this);
+        hero.addView(Ui.text(this, "Connect to your PC", 22, 0xffffffff, true));
+        hero.addView(Ui.text(this, "On your PC, open Mirra. Point this phone's camera at the QR code on its Home page "
+                + "and tap the link: Mirra connects by itself.", 15, 0xe6ffffff, false));
+        root.addView(hero);
+
         LinearLayout card = Ui.card(this);
-        card.addView(Ui.text(this, "Connect to your PC", 19, Ui.TEXT, true));
-        card.addView(Ui.text(this, "On your PC, open Samantha. Its Home page shows the PC's address and a code. "
-                + "Type them here.", 14, Ui.MUTED, false));
-        card.addView(caption("PC address"));
-        addressField = field("For example 100.101.102.103", InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_URI);
+        card.addView(Ui.title(this, "Or type it in"));
+        card.addView(Ui.text(this, "Mirra on the PC shows its name and a 6-digit code.", 14, Ui.MUTED, false));
+        card.addView(caption("PC name or address"));
+        addressField = field("For example  my-pc  or  100.101.102.103", InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_URI);
         String old = prefs.server();
         if (!old.isEmpty()) addressField.setText(Net.host(old));
         card.addView(addressField);
@@ -126,12 +172,11 @@ public class MainActivity extends Activity {
         codeField = field("6 digits", InputType.TYPE_CLASS_NUMBER);
         codeField.setImeOptions(EditorInfo.IME_ACTION_GO);
         codeField.setOnEditorActionListener((v, action, event) -> {
-            pair();
+            pairFromFields();
             return true;
         });
         card.addView(codeField);
-        card.addView(Ui.gap(this, 16));
-        connect = Ui.button(this, "Connect", true, v -> pair());
+        connect = Ui.button(this, "Connect", true, v -> pairFromFields());
         card.addView(connect);
         pairMessage = Ui.text(this, "", 14, Ui.WARN, false);
         pairMessage.setPadding(0, Ui.dp(this, 10), 0, 0);
@@ -139,24 +184,28 @@ public class MainActivity extends Activity {
         root.addView(card);
 
         LinearLayout help = Ui.card(this);
-        help.addView(Ui.text(this, "Before you start", 16, Ui.TEXT, true));
-        help.addView(Ui.text(this, "Your phone reaches your PC through Tailscale, a free private network. Install the "
-                + "Tailscale app on this phone, sign in with the same account as on the PC, and switch it on.", 14, Ui.MUTED, false));
-        help.addView(Ui.gap(this, 10));
-        help.addView(Ui.button(this, "Get Tailscale", false, v -> open("https://play.google.com/store/apps/details?id=com.tailscale.ipn")));
+        help.addView(Ui.settingRow(this, R.drawable.ic_monitor, "Tailscale on this phone",
+                "Mirra reaches your PC through Tailscale, a free private network. Install it, sign in with the same "
+                        + "account as on the PC, and switch it on.", null));
+        help.addView(Ui.button(this, "Get Tailscale", false,
+                v -> open("https://play.google.com/store/apps/details?id=com.tailscale.ipn")));
         root.addView(help);
     }
 
-    private void pair() {
-        String address = addressField.getText().toString().trim();
-        String code = codeField.getText().toString().replaceAll("\\D", "");
+    private void pairFromFields() {
+        pair(addressField.getText().toString().trim(), codeField.getText().toString().replaceAll("\\D", ""));
+    }
+
+    private void pair(String address, String code) {
         if (address.isEmpty() || code.length() != 6) {
-            pairMessage.setText("Type the PC address and the 6-digit code from Samantha on your PC.");
+            if (pairMessage != null) pairMessage.setText("Type the PC's name (or address) and the 6-digit code from Mirra on the PC.");
             return;
         }
-        connect.setEnabled(false);
-        pairMessage.setTextColor(Ui.MUTED);
-        pairMessage.setText("Connecting...");
+        if (connect != null) connect.setEnabled(false);
+        if (pairMessage != null) {
+            pairMessage.setTextColor(Ui.MUTED);
+            pairMessage.setText("Connecting...");
+        }
         String base = Net.normalize(address);
         new Thread(() -> {
             try {
@@ -164,13 +213,20 @@ public class MainActivity extends Activity {
                 JSONObject answer = new JSONObject(new String(Net.postJson(base + "/api/pair", null, body.toString()), "UTF-8"));
                 prefs.pair(base, answer.getString("token"), answer.optString("pc", ""));
                 PhoneService.settingsChanged();
-                main.post(this::build);
+                main.post(() -> {
+                    Toast.makeText(this, "Connected to " + prefs.pcLabel() + ".", Toast.LENGTH_LONG).show();
+                    build();
+                });
             } catch (Exception e) {
                 String why = Net.explain(e);
                 main.post(() -> {
-                    connect.setEnabled(true);
-                    pairMessage.setTextColor(Ui.WARN);
-                    pairMessage.setText(why);
+                    if (connect != null) connect.setEnabled(true);
+                    if (pairMessage != null) {
+                        pairMessage.setTextColor(Ui.WARN);
+                        pairMessage.setText(why);
+                    } else {
+                        Toast.makeText(this, why, Toast.LENGTH_LONG).show();
+                    }
                 });
             }
         }).start();
@@ -178,87 +234,98 @@ public class MainActivity extends Activity {
 
     // -- paired -------------------------------------------------------------------------------------
     private void buildPaired() {
-        LinearLayout pc = Ui.card(this);
-        LinearLayout head = Ui.row(this);
-        pcName = Ui.text(this, prefs.pcLabel(), 20, Ui.TEXT, true);
-        head.addView(pcName, Ui.weight(1));
-        pc.addView(head);
-        pcStatus = Ui.text(this, "Checking...", 14, Ui.MUTED, false);
-        pc.addView(pcStatus);
-        pc.addView(Ui.gap(this, 14));
-        Button show = Ui.button(this, "Show my PC", true, v -> startActivity(new Intent(this, ViewerActivity.class)));
+        LinearLayout hero = Ui.hero(this);
+        LinearLayout top = Ui.row(this);
+        top.addView(Ui.icon(this, R.drawable.ic_monitor, 0xffffffff, 26));
+        pcName = Ui.text(this, prefs.pcLabel(), 22, 0xffffffff, true);
+        pcName.setPadding(Ui.dp(this, 12), 0, 0, 0);
+        top.addView(pcName, Ui.weight(1));
+        hero.addView(top);
+        pcChipHolder = new LinearLayout(this);
+        pcChipHolder.setPadding(0, Ui.dp(this, 10), 0, 0);
+        hero.addView(pcChipHolder);
+        Button show = Ui.button(this, "Show my PC", false, v -> startActivity(new Intent(this, ViewerActivity.class)));
+        show.setBackground(Ui.ripple(Ui.round(this, 0xffffffff, 16, 0), Ui.round(this, 0xffffffff, 16, 0)));
+        show.setTextColor(0xff1d1650);
         show.setTextSize(17);
-        show.setMinHeight(Ui.dp(this, 56));
-        pc.addView(show);
-        pc.addView(Ui.gap(this, 6));
-        soundSwitch = Ui.toggle(this, "Play the PC's sound", prefs.sound(), (b, on) -> {
-            prefs.setSound(on);
-            lowDataSwitch.setVisibility(on ? View.VISIBLE : View.GONE);
-        });
-        pc.addView(soundSwitch);
-        lowDataSwitch = Ui.toggle(this, "Use less data for sound (mono)", prefs.lowData(), (b, on) -> prefs.setLowData(on));
-        lowDataSwitch.setVisibility(prefs.sound() ? View.VISIBLE : View.GONE);
-        pc.addView(lowDataSwitch);
-        root.addView(pc);
+        show.setMinHeight(Ui.dp(this, 58));
+        hero.addView(show);
+        root.addView(hero);
+
+        LinearLayout sound = Ui.card(this);
+        sound.addView(Ui.settingRow(this, R.drawable.ic_sound, "Play the PC's sound", "Hear the PC while you watch it.",
+                Ui.toggle(this, prefs.sound(), (b, on) -> {
+                    prefs.setSound(on);
+                    lowDataRow.setVisibility(on ? View.VISIBLE : View.GONE);
+                })));
+        lowDataSwitch = Ui.toggle(this, prefs.lowData(), (b, on) -> prefs.setLowData(on));
+        lowDataRow = Ui.settingRow(this, R.drawable.ic_sound, "Use less data", "Mono sound: a quarter of the data.", lowDataSwitch);
+        lowDataRow.setVisibility(prefs.sound() ? View.VISIBLE : View.GONE);
+        sound.addView(lowDataRow);
+        root.addView(sound);
 
         LinearLayout phone = Ui.card(this);
-        phone.addView(Ui.text(this, "Let this PC see and use my phone", 17, Ui.TEXT, true));
+        LinearLayout ph = Ui.row(this);
+        ph.addView(Ui.icon(this, R.drawable.ic_phone, Ui.ACCENT2, 22));
+        TextView pt = Ui.title(this, "This phone on your PC");
+        pt.setPadding(Ui.dp(this, 10), 0, 0, 0);
+        ph.addView(pt, Ui.weight(1));
+        phone.addView(ph);
         phoneStatus = Ui.text(this, "", 14, Ui.MUTED, false);
-        phoneStatus.setPadding(0, Ui.dp(this, 4), 0, 0);
+        phoneStatus.setPadding(0, Ui.dp(this, 6), 0, 0);
         phone.addView(phoneStatus);
+
         accessOff = new LinearLayout(this);
         accessOff.setOrientation(LinearLayout.VERTICAL);
-        accessOff.addView(Ui.gap(this, 12));
+        accessOff.addView(Ui.text(this, "Let Mirra on your PC show this phone and use it with the mouse and keyboard. "
+                + "Switch it on once in Android's Accessibility settings: choose Mirra and turn it on.", 14, Ui.MUTED, false));
         accessOff.addView(Ui.button(this, "Turn it on", true, v -> {
             if (Build.VERSION.SDK_INT >= 33) requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS}, 1);
             startActivity(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS));
         }));
-        accessOff.addView(Ui.text(this, "\nIn the list, choose Samantha and switch it on. You do this once; Android "
-                + "never asks again.", 13, Ui.MUTED, false));
         // Android 13+ blocks the switch ("Restricted setting") for an app installed from a downloaded file, and many
-        // phones hide the way to allow it. Samantha Setup installs the app so that Android does not block it.
+        // phones hide the way to allow it. Mirra Setup installs the app so that Android does not block it.
         restrictedBox = new LinearLayout(this);
         restrictedBox.setOrientation(LinearLayout.VERTICAL);
         restrictedBox.addView(Ui.text(this, "\nDoes Android say \"Restricted setting\"? It blocks this switch because "
-                + "this copy of Samantha was installed from a downloaded file. Fix it once with Samantha Setup: download "
-                + "it, open it, and let it install Samantha again (it removes this copy first, so pair with your PC "
-                + "again afterwards). Then the switch works.", 13, Ui.WARN, false));
-        restrictedBox.addView(Ui.gap(this, 10));
-        restrictedBox.addView(Ui.button(this, "Get Samantha Setup", false, v -> open(SETUP_URL)));
+                + "Mirra was installed from a downloaded file. Fix it once: get Mirra Setup, open it and let it install "
+                + "Mirra again (it removes this copy first, so connect to your PC again afterwards).", 13, Ui.WARN, false));
+        restrictedBox.addView(Ui.button(this, "Get Mirra Setup", false, v -> open(SETUP_URL)));
         accessOff.addView(restrictedBox);
         phone.addView(accessOff);
-        controlSwitch = Ui.toggle(this, "Allow tapping, swiping and typing", prefs.control(), (b, on) -> {
-            prefs.setControl(on);
-            PhoneService.settingsChanged();
-        });
-        phone.addView(controlSwitch);
-        pauseSwitch = Ui.toggle(this, "Pause (the PC can't see or use this phone)", prefs.paused(), (b, on) -> {
-            prefs.setPaused(on);
-            PhoneService.settingsChanged();
-        });
-        phone.addView(pauseSwitch);
-        phone.addView(Ui.text(this, "While your PC is looking, a notification says so. Banking apps and password "
+
+        accessOn = new LinearLayout(this);
+        accessOn.setOrientation(LinearLayout.VERTICAL);
+        accessOn.addView(Ui.divider(this));
+        accessOn.addView(Ui.settingRow(this, R.drawable.ic_touch, "Let the PC tap and type", "Use this phone with the PC's mouse and keyboard.",
+                Ui.toggle(this, prefs.control(), (b, on) -> {
+                    prefs.setControl(on);
+                    PhoneService.settingsChanged();
+                })));
+        accessOn.addView(Ui.settingRow(this, R.drawable.ic_video, "Smooth video", "Up to 60 pictures a second. Off: a few screenshots a second.",
+                Ui.toggle(this, prefs.video(), (b, on) -> prefs.setVideo(on))));
+        accessOn.addView(Ui.settingRow(this, R.drawable.ic_pause, "Pause", "The PC can't see or use this phone.",
+                Ui.toggle(this, prefs.paused(), (b, on) -> {
+                    prefs.setPaused(on);
+                    PhoneService.settingsChanged();
+                })));
+        accessOn.addView(Ui.text(this, "While your PC is looking, a notification says so. Banking apps and password "
                 + "screens show black on the PC.", 12, Ui.MUTED, false));
+        phone.addView(accessOn);
         root.addView(phone);
 
-        updateCard = Ui.card(this);
-        updateCard.addView(Ui.text(this, "Update available", 17, Ui.TEXT, true));
-        updateText = Ui.text(this, "", 14, Ui.MUTED, false);
-        updateCard.addView(updateText);
-        updateCard.addView(Ui.gap(this, 10));
-        updateCard.addView(Ui.button(this, "Update", true, v -> update()));
-        updateCard.setVisibility(View.GONE);
-        root.addView(updateCard);
-
         LinearLayout about = Ui.card(this);
-        about.addView(Ui.text(this, "This PC", 16, Ui.TEXT, true));
-        about.addView(Ui.text(this, prefs.server(), 14, Ui.MUTED, false));
-        about.addView(Ui.gap(this, 10));
-        about.addView(Ui.button(this, "Forget this PC", false, v -> {
-            prefs.unpair();
-            PhoneService.settingsChanged();
-            build();
-        }));
+        about.addView(Ui.settingRow(this, R.drawable.ic_logout, "Connected to " + prefs.pcLabel(), prefs.server(), null));
+        about.addView(Ui.button(this, "Forget this PC", false, v -> new AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
+                .setTitle("Forget " + prefs.pcLabel() + "?")
+                .setMessage("This phone stops seeing the PC, and the PC stops seeing this phone. You can connect again with a new code.")
+                .setPositiveButton("Forget", (d, w) -> {
+                    prefs.unpair();
+                    PhoneService.settingsChanged();
+                    build();
+                })
+                .setNegativeButton("Cancel", null)
+                .show()));
         root.addView(about);
     }
 
@@ -272,7 +339,7 @@ public class MainActivity extends Activity {
 
     /**
      * Whether Android may have marked this app "restricted" (Android 13+, installed from a downloaded file). An app
-     * cannot read that mark, so this goes by who installed it: Samantha Setup and the Play Store never cause it.
+     * cannot read that mark, so this goes by who installed it: Mirra Setup and the Play Store never cause it.
      */
     private boolean restricted() {
         if (Build.VERSION.SDK_INT < 33) return false;
@@ -291,38 +358,38 @@ public class MainActivity extends Activity {
     }
 
     private void refresh() {
-        if (!prefs.paired() || pcStatus == null) return;
+        if (!prefs.paired() || pcName == null) return;
         String o = online;
         pcName.setText(prefs.pcLabel());
-        if (o == null) {
-            pcStatus.setText("Checking...");
-            pcStatus.setTextColor(Ui.MUTED);
-        } else if (o.isEmpty()) {
-            pcStatus.setText("Online");
-            pcStatus.setTextColor(Ui.OK);
-        } else {
-            pcStatus.setText(o);
-            pcStatus.setTextColor(Ui.WARN);
+        pcChipHolder.removeAllViews();
+        if (o == null) pcChipHolder.addView(Ui.chip(this, "Checking...", 0xffd6d9e3));
+        else if (o.isEmpty()) pcChipHolder.addView(Ui.chip(this, "Online", 0xff6ee7b7));
+        else {
+            pcChipHolder.addView(Ui.chip(this, "Can't reach it", 0xfffcd34d));
         }
         boolean on = accessibilityOn();
         accessOff.setVisibility(on ? View.GONE : View.VISIBLE);
+        accessOn.setVisibility(on ? View.VISIBLE : View.GONE);
         restrictedBox.setVisibility(restricted() ? View.VISIBLE : View.GONE);
-        controlSwitch.setVisibility(on ? View.VISIBLE : View.GONE);
-        pauseSwitch.setVisibility(on ? View.VISIBLE : View.GONE);
-        if (!on) {
-            phoneStatus.setText("Off. Your PC can't see this phone yet.");
-        } else if (PhoneService.instance == null) {
-            phoneStatus.setText("Starting...");
-        } else {
-            phoneStatus.setText(PhoneService.status);
+        if (!on) phoneStatus.setText("Off. Your PC can't see this phone yet.");
+        else if (PhoneService.instance == null) phoneStatus.setText("Starting...");
+        else phoneStatus.setText(PhoneService.status);
+        if (o != null && !o.isEmpty()) phoneStatus.setText(o);
+        if (Updater.newerOnPc(this, pcVersion) && !updating && !offered.equals(pcVersion)) {
+            offered = pcVersion;
+            offerUpdate(pcVersion);
         }
-        if (Updater.newerOnPc(this, pcVersion) && !updating) {
-            updateText.setText("Your PC has Samantha " + pcVersion + " (this phone has " + Updater.installedVersion(this)
-                    + "). Update this app to match.");
-            updateCard.setVisibility(View.VISIBLE);
-        } else if (!updating) {
-            updateCard.setVisibility(View.GONE);
-        }
+    }
+
+    /** The pop-up: a newer Mirra is on the PC. */
+    private void offerUpdate(String version) {
+        new AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
+                .setTitle("Update available")
+                .setMessage("Mirra " + version + " is ready (you have " + Updater.installedVersion(this) + "). "
+                        + "It downloads from your PC in a few seconds.")
+                .setPositiveButton("Update now", (d, w) -> update())
+                .setNegativeButton("Later", null)
+                .show();
     }
 
     /** While this screen is open: is the PC there, and does it have a newer app? */
@@ -331,11 +398,7 @@ public class MainActivity extends Activity {
             if (!prefs.paired()) {
                 online = null;
                 pcVersion = "";
-                try {
-                    Thread.sleep(1000);
-                } catch (InterruptedException e) {
-                    return;
-                }
+                if (!sleep(1000)) return;
                 continue;
             }
             try {
@@ -347,24 +410,31 @@ public class MainActivity extends Activity {
             } catch (Exception e) {
                 online = Net.explain(e);
             }
-            try {
-                Thread.sleep(4000);
-            } catch (InterruptedException e) {
-                return;
-            }
+            if (!sleep(4000)) return;
+        }
+    }
+
+    private static boolean sleep(long ms) {
+        try {
+            Thread.sleep(ms);
+            return true;
+        } catch (InterruptedException e) {
+            return false;
         }
     }
 
     private void update() {
-        if (updating || !Updater.mayInstall(this)) return;
+        if (updating || !Updater.mayInstall(this)) {
+            offered = "";   // ask again when the user comes back from allowing installs
+            return;
+        }
         updating = true;
-        updateText.setText("Downloading the update from your PC...");
+        Toast.makeText(this, "Downloading the update from your PC...", Toast.LENGTH_SHORT).show();
         new Thread(() -> {
             try {
                 Updater.install(this, prefs.server(), prefs.token());
-                main.post(() -> updateText.setText("Confirm the update in the window Android shows."));
             } catch (Exception e) {
-                main.post(() -> updateText.setText("The update did not download: " + Net.explain(e)));
+                main.post(() -> Toast.makeText(this, "The update did not download: " + Net.explain(e), Toast.LENGTH_LONG).show());
             } finally {
                 main.postDelayed(() -> updating = false, 5000);
             }

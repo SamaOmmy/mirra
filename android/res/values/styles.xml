@@ -1,15 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <style name="Samantha" parent="@android:style/Theme.Material.NoActionBar">
+    <style name="Mirra" parent="@android:style/Theme.Material.NoActionBar">
         <item name="android:colorAccent">#8b6cff</item>
-        <item name="android:colorPrimary">#101218</item>
-        <item name="android:colorPrimaryDark">#101218</item>
-        <item name="android:windowBackground">#101218</item>
-        <item name="android:statusBarColor">#101218</item>
-        <item name="android:navigationBarColor">#101218</item>
+        <item name="android:colorPrimary">#0B0D12</item>
+        <item name="android:colorPrimaryDark">#0B0D12</item>
+        <item name="android:windowBackground">#0B0D12</item>
+        <item name="android:statusBarColor">#0B0D12</item>
+        <item name="android:navigationBarColor">#0B0D12</item>
     </style>
 
-    <style name="Samantha.Fullscreen">
+    <style name="Mirra.Fullscreen">
         <item name="android:windowBackground">#000000</item>
         <item name="android:windowFullscreen">true</item>
     </style>

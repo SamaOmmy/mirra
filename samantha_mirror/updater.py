@@ -24,8 +24,9 @@ from . import __version__, autostart, config, proc
 REPO = "SamaOmmy/samantha-screen-mirror"
 API_LATEST = f"https://api.github.com/repos/{REPO}/releases/latest"
 DOWNLOAD_PREFIX = f"https://github.com/{REPO}/releases/download/"
-ZIP_NAME = "SamanthaScreenMirror-windows.zip"
+ZIP_NAME = "Mirra-for-Windows.zip"
 SUM_NAME = ZIP_NAME + ".sha256"
+LEGACY_ZIP_NAME = "SamanthaScreenMirror-windows.zip"   # what versions before 0.6 download (still published)
 CHECK_EVERY = 12 * 3600   # seconds between background checks
 FIRST_CHECK_DELAY = 60    # seconds after start, so startup stays quick
 
@@ -80,6 +81,8 @@ def latest_release() -> Release:
         raise UpdateError("GitHub sent something unexpected.") from exc
     # Only ever download from this project's own release page.
     zip_url, sha_url = assets.get(ZIP_NAME), assets.get(SUM_NAME)
+    if not zip_url:
+        zip_url, sha_url = assets.get(LEGACY_ZIP_NAME), assets.get(LEGACY_ZIP_NAME + ".sha256")
     for url in (zip_url, sha_url):
         if url and not url.startswith(DOWNLOAD_PREFIX):
             raise UpdateError("Release asset is not hosted on the project's release page; refusing.")
@@ -227,7 +230,7 @@ try {{
   $wasDisabled = (Get-ScheduledTask -TaskName $task -ErrorAction SilentlyContinue).State -eq 'Disabled'
   Disable-ScheduledTask -TaskName $task -ErrorAction SilentlyContinue | Out-Null
   Stop-ScheduledTask -TaskName $task -ErrorAction SilentlyContinue
-  Get-Process samantha-mirror-service, samantha-mirror, Samantha -ErrorAction SilentlyContinue |
+  Get-Process samantha-mirror-service, samantha-mirror, Samantha, Mirra -ErrorAction SilentlyContinue |
     Where-Object {{ $_.Path -and $_.Path.StartsWith($install, [StringComparison]::OrdinalIgnoreCase) }} |
     Stop-Process -Force -ErrorAction SilentlyContinue
   Start-Sleep -Seconds 2
@@ -275,7 +278,7 @@ def update_exe(release: Release, relaunch: Path | None = None) -> None:
     staging = install.parent / (install.name + ".update")
     work = Path(tempfile.mkdtemp(prefix="samantha-update-"))
     try:
-        zip_path = work / ZIP_NAME
+        zip_path = work / "download.zip"
         print(f"  Downloading v{release.version} ({release.zip_url.rsplit('/', 1)[-1]})")
         _download(release.zip_url, zip_path)
         verify_sha256(zip_path, _get(release.sha_url).decode("utf-8", "replace"))
@@ -288,9 +291,10 @@ def update_exe(release: Release, relaunch: Path | None = None) -> None:
                 archive.extractall(work / "x")
         except (zipfile.BadZipFile, OSError) as exc:
             raise UpdateError(f"The download is not a valid zip ({exc}).") from exc
-        unpacked = work / "x" / "SamanthaScreenMirror"
+        unpacked = next((work / "x" / n for n in ("Mirra", "SamanthaScreenMirror") if (work / "x" / n).is_dir()),
+                        work / "x" / "Mirra")
         if not (unpacked / "samantha-mirror.exe").exists():
-            raise UpdateError("The download does not look like Samantha Screen Mirror.")
+            raise UpdateError("The download does not look like Mirra.")
         try:
             proc.run(["powershell", "-NoProfile", "-Command",
                             f"Move-Item -LiteralPath '{unpacked}' -Destination '{staging}'"],

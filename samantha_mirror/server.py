@@ -11,7 +11,7 @@ import mss
 from flask import Flask, Response, abort, jsonify, make_response, redirect, request, send_from_directory
 from PIL import Image
 
-from . import __version__, updater
+from . import __version__, joinpage, updater
 from .audio import AudioError, AudioSource, to_low_data
 from .auth import COOKIE, Auth
 from .capture import FrameSource
@@ -22,8 +22,9 @@ from .phonelink import MAX_FRAME, POLL_SECONDS, BadInput, PhoneHub, parse_input
 BOUNDARY = "frame"
 COOKIE_MAX_AGE = 30 * 24 * 3600
 WEB_DIR = Path(__file__).resolve().parent / "web"
-PUBLIC_ENDPOINTS = {"index", "static", "login", "pair"}
+PUBLIC_ENDPOINTS = {"index", "static", "login", "pair", "join", "download_setup"}
 PHONE_APP = Path(__file__).resolve().parent / "phone_app" / "SamanthaPhone.apk"
+PHONE_SETUP = PHONE_APP.with_name("SamanthaSetup.apk")
 
 
 def _monitors():
@@ -63,12 +64,12 @@ def _parse_settings(data, monitor_count):
 
 
 def create_app(cfg: Config, sound: AudioSource | None = None, phone: PhoneHub | None = None,
-               pairing: Pairing | None = None) -> Flask:
+               pairing: Pairing | None = None, auth: Auth | None = None) -> Flask:
     app = Flask(__name__, static_folder=str(WEB_DIR), static_url_path="")
     app.config["MAX_CONTENT_LENGTH"] = MAX_FRAME + 4096
     phone = phone or PhoneHub()
     pairing = pairing or Pairing()
-    auth = Auth(cfg.token)
+    auth = auth or Auth(cfg.token)
     sound = sound or AudioSource(enabled=cfg.audio)
     source = FrameSource(cfg.monitor, cfg.fps, cfg.jpeg_quality, cfg.scale, cfg.cursor, cfg.capture)
 
@@ -106,7 +107,7 @@ def create_app(cfg: Config, sound: AudioSource | None = None, phone: PhoneHub | 
         resp.headers["X-Content-Type-Options"] = "nosniff"
         resp.headers["X-Frame-Options"] = "DENY"
         resp.headers["Referrer-Policy"] = "no-referrer"
-        resp.headers["Content-Security-Policy"] = (
+        resp.headers["Content-Security-Policy"] = joinpage.CSP if request.endpoint == "join" else (
             "default-src 'none'; img-src 'self' blob:; script-src 'self'; style-src 'self'; "
             "connect-src 'self'; manifest-src 'self'; worker-src 'self'; frame-ancestors 'none'"
         )
@@ -288,6 +289,22 @@ def create_app(cfg: Config, sound: AudioSource | None = None, phone: PhoneHub | 
     def phone_state():
         return jsonify(phone.state() | {"app_available": PHONE_APP.exists()})
 
+    # -- the QR code in the Mirra window: connect a phone with one scan --------------------------------
+    @app.get("/join")
+    def join():
+        host = request.host.rsplit(":", 1)[0].strip("[]")
+        code = request.args.get("c")
+        return Response(joinpage.page(socket.gethostname(), host, cfg.port, code if pairing.current() else None),
+                        mimetype="text/html")
+
+    @app.get("/download/setup")
+    def download_setup():
+        """Mirra Setup for Android (it holds nothing secret), so a new phone needs no GitHub."""
+        if not PHONE_SETUP.exists():
+            return jsonify(error="This copy of Mirra does not include the Android app."), 404
+        return send_from_directory(PHONE_SETUP.parent, PHONE_SETUP.name, as_attachment=True,
+                                   download_name="Mirra-for-Android-Setup.apk", mimetype="application/vnd.android.package-archive")
+
     @app.get("/api/phone/app.apk")
     def phone_app():
         if not PHONE_APP.exists():
@@ -308,7 +325,7 @@ def create_app(cfg: Config, sound: AudioSource | None = None, phone: PhoneHub | 
         phone.hello(info)
         # The PC carries the phone app of its own version: the app offers to update itself from here.
         return jsonify(ok=True, poll=POLL_SECONDS, pc=socket.gethostname(), version=__version__,
-                       app_version=__version__ if PHONE_APP.exists() else None)
+                       app_version=__version__ if PHONE_APP.exists() else None, relay_port=cfg.port + 1)
 
     @app.get("/api/phone/commands")
     def phone_commands():

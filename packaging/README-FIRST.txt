@@ -1,33 +1,27 @@
-Samantha Screen Mirror
-======================
+Mirra
+=====
 
 Your PC on your phone, and your Android phone on your PC. Privately, over Tailscale.
 
-1. Double-click  Samantha.exe
-   The Samantha window opens. The first time it checks Tailscale and starts Samantha
+1. Double-click  Mirra.exe
+   The Mirra window opens. The first time it checks Tailscale and starts Mirra
    (it then starts by itself whenever you log in to Windows).
 
 2. On your Android phone: install the free Tailscale app, sign in with the SAME
-   account as this PC and switch it on. Then scan the QR code on Samantha's Home page:
-   it downloads Samantha Setup. Install and open it, tap Install Samantha, then open
-   Samantha and type the PC address and code shown on the PC.
+   account as this PC and switch it on. Then point the phone's camera at the QR code
+   on Mirra's Home page and tap the link: it installs Mirra and connects it.
 
-3. In the phone app, "Show my PC" shows this PC. Under "My phone" in the Samantha
-   window on the PC you see your phone and use it with the mouse and keyboard.
+3. In the phone app, "Show my PC" shows this PC. In the Mirra window on the PC,
+   "Open phone window" shows your phone; use it with the mouse and keyboard.
 
-iPhone? There is no iPhone app, but Safari can watch the PC: in the Samantha window go
-to Settings > iPhone or a web browser > Show the link, and scan it.
+iPhone? There is no iPhone app, but Safari can watch the PC: in the Mirra window go to
+Settings > iPhone or a web browser > Show the link, and scan it.
 
 Windows may say "Windows protected your PC" the first time (the program is not
-code-signed). Click "More info" > "Run anyway". The source code is public, so you can
-also build it yourself: see the project page.
+code-signed). Click "More info" > "Run anyway".
 
-Updates: the Samantha window says when a new version is out (Update now). After the PC
+Updates: Mirra shows a pop-up when a new version is out (Update now). After the PC
 updates, the phone app offers the matching update too.
 
-For the command line (PowerShell in this folder):
-  .\samantha-mirror.exe doctor    check that everything works
-  .\samantha-mirror.exe update    update from the command line
-  .\samantha-mirror.exe uninstall remove start-at-logon and the HTTPS setup
-
 Do not move or delete this folder after setup: start-at-logon points to it.
+(An easier way to install is Mirra-for-Windows-Setup.exe from the releases page.)

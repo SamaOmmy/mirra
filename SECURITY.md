@@ -1,6 +1,7 @@
 # Security
 
-Samantha shows your PC screen on your phone, and your Android phone on your PC, so it is built to be private by default.
+Mirra (formerly Samantha Screen Mirror) shows your PC screen on your phone, and your Android phone on your PC, so it is
+built to be private by default.
 
 ## How it is protected
 
@@ -24,6 +25,14 @@ Samantha shows your PC screen on your phone, and your Android phone on your PC, 
   notification while it does, and has a control switch and a pause switch. It uses Android's Accessibility permission,
   which you grant once and can revoke at any time in Android settings. It cannot see banking-app or password screens
   (Android blocks them).
+- **Live phone link.** The phone's screen (H.264 video) and the touches for it go over a plain TCP port next to the
+  web port (SM_PORT + 1), on the same addresses only, with the same token, the same lockout and a size limit on every
+  message. It only forwards bytes between the phone and the Mirra window; nothing is decoded on the server.
+- **Screen recording.** To send video, the phone app starts Android's screen recording each time the Mirra window on
+  the PC shows the phone, and answers Android's "Start now?" question itself through its Accessibility permission (only
+  during the few seconds after it asked). A notification shows while it records; it stops when the window closes.
+- **Pairing page.** The QR code on the PC opens `/join` on the PC: a page without secrets (the code in its address came
+  from the PC screen and runs out), and `/download/setup` serves Mirra Setup, which holds no secrets either.
 - **App updates.** The phone app only installs updates from the PC it is paired with (over the same token-protected
   connection), and Android checks that every update is signed with the same key as the installed app and asks you
   to confirm it.

@@ -1,8 +1,8 @@
-"""Start Menu and Desktop shortcuts to the Samantha window (packaged .exe only).
+"""Start Menu and Desktop shortcuts to the Mirra window (packaged .exe only).
 
-Versions before 0.5 had no window: their shortcuts (and taskbar pins) opened the console program. Those are pointed
-at the window instead, so a pinned Samantha keeps working after the update. Only shortcuts that point into this
-install folder are touched.
+Older versions' shortcuts (and taskbar pins) opened the console program (before 0.5) or Samantha.exe (0.5). Those are
+pointed at Mirra.exe instead, and on the Desktop and in the Start Menu renamed to "Mirra", so they keep working after
+the update. Only shortcuts that point into this install folder are touched.
 """
 import os
 import sys
@@ -10,9 +10,9 @@ from pathlib import Path
 
 from . import proc
 
-NAME = "Samantha"
-WINDOW_EXE = "Samantha.exe"
-OLD_EXE = "samantha-mirror.exe"
+NAME = "Mirra"
+WINDOW_EXE = "Mirra.exe"
+OLD_EXES = ("samantha-mirror.exe", "Samantha.exe")
 
 
 def _q(text) -> str:
@@ -47,17 +47,22 @@ def window_exe() -> Path | None:
 def script(window: Path, folders: list[Path], create: bool) -> str:
     """PowerShell: retarget old shortcuts in `folders` to `window`, and (if `create`) add the Start Menu and
     Desktop shortcuts."""
-    old = window.with_name(OLD_EXE)
+    olds = ", ".join(_q(window.with_name(name)) for name in OLD_EXES)
+    renamable = ", ".join(_q(f) for f in folders[:2])   # not taskbar pins: renaming those unpins them
     lines = [
         "$shell = New-Object -ComObject WScript.Shell",
-        f"$window = {_q(window)}; $old = {_q(old)}",
+        f"$window = {_q(window)}; $olds = @({olds}); $renamable = @({renamable})",
         f"foreach ($dir in @({', '.join(_q(f) for f in folders)})) {{",
         "  if (-not (Test-Path -LiteralPath $dir)) { continue }",
         "  foreach ($file in Get-ChildItem -LiteralPath $dir -Filter *.lnk -ErrorAction SilentlyContinue) {",
         "    $link = $shell.CreateShortcut($file.FullName)",
-        "    if ($link.TargetPath -ieq $old -and -not $link.Arguments) {",
+        "    if (($olds -contains $link.TargetPath) -and -not $link.Arguments) {",
         "      $link.TargetPath = $window; $link.WorkingDirectory = (Split-Path $window); $link.IconLocation = $window + ',0'",
         "      $link.Save()",
+        f"      $named = Join-Path $dir '{NAME}.lnk'",
+        "      if (($renamable -contains $dir) -and $file.Name -ne 'Mirra.lnk' -and -not (Test-Path -LiteralPath $named)) {",
+        "        Rename-Item -LiteralPath $file.FullName -NewName 'Mirra.lnk' -ErrorAction SilentlyContinue",
+        "      }",
         "    }",
         "  }",
         "}",

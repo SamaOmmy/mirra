@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- written by packaging/make_logo.py -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp"
+    android:viewportWidth="108" android:viewportHeight="108">
+    <path android:pathData="M58.61,59.38 H32.47 A3.16,3.16 0 0 1 29.31,56.22 V35.54 A3.16,3.16 0 0 1 32.47,32.38 H69.72 A3.16,3.16 0 0 1 72.88,35.54 V40.84" android:strokeColor="#FFFFFFFF" android:strokeWidth="4.61" android:strokeLineCap="butt" android:strokeLineJoin="round" />
+    <path android:pathData="M65.96,46.05 H76.56 A2.14,2.14 0 0 1 78.69,48.19 V73.48 A2.14,2.14 0 0 1 76.56,75.62 H65.96 A2.14,2.14 0 0 1 63.83,73.48 V48.19 A2.14,2.14 0 0 1 65.96,46.05 Z" android:strokeColor="#FFFFFFFF" android:strokeWidth="4.61" android:strokeLineCap="butt" android:strokeLineJoin="round" />
+    <path android:pathData="M46.14,61.35 H56.05 V68.18 H46.14 Z" android:fillColor="#FFFFFFFF" />
+    <path android:pathData="M41.01,67.84 H58.61 V71.94 H41.01 A2.05,2.05 0 0 1 38.96,69.89 V69.89 A2.05,2.05 0 0 1 41.01,67.84 Z" android:fillColor="#FFFFFFFF" />
+    <path android:pathData="M69.64,70.06 H72.88 A0.94,0.94 0 0 1 73.82,71.00 V71.00 A0.94,0.94 0 0 1 72.88,71.94 H69.64 A0.94,0.94 0 0 1 68.70,71.00 V71.00 A0.94,0.94 0 0 1 69.64,70.06 Z" android:fillColor="#FFFFFFFF" />
+</vector>

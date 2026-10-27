@@ -5,17 +5,19 @@ import android.accessibilityservice.GestureDescription;
 import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
+import android.content.Intent;
 import android.content.pm.PackageInfo;
 import android.graphics.Bitmap;
 import android.graphics.Path;
 import android.hardware.HardwareBuffer;
 import android.hardware.display.DisplayManager;
+import android.media.AudioManager;
 import android.os.Build;
+import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.PowerManager;
 import android.os.SystemClock;
-import android.os.Bundle;
 import android.util.DisplayMetrics;
 import android.view.Display;
 import android.view.accessibility.AccessibilityEvent;
@@ -27,7 +29,9 @@ import org.json.JSONObject;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
@@ -37,29 +41,29 @@ import java.util.concurrent.TimeUnit;
 /**
  * Talks to the PC and does what it asks. Runs for as long as the Accessibility permission is on.
  *
- * It connects out to the PC (it never listens for connections), asks "anything to do?" in a long request, and:
- *  - while a page on the PC is watching, takes screenshots and uploads them (Android gives the screenshot to
- *    accessibility services without a "start recording" question),
- *  - taps, swipes, presses Back/Home and types when the PC sends those and the control switch is on.
+ * It connects out to the PC (it never listens for connections) and asks "anything to do?" in a long request. When
+ * the Mirra window on the PC shows this phone it is told to share the screen:
+ *  - as smooth video (CaptureService, screen recording). Android asks "Start now?" for every recording; this service
+ *    answers that question itself, so nobody has to tap it;
+ *  - or, if recording is not possible, as screenshots (a few a second; Android gives those to accessibility services).
+ * Touches, keys and typing from the PC arrive over the live link (or the web link) when the control switch is on.
  */
 public class PhoneService extends AccessibilityService {
     static volatile PhoneService instance;
     static volatile String status = "Not running";
     private static final String PAUSED = "Paused. The PC cannot see or use this phone.";
-
     private static final String CHANNEL = "watching";
     private static final int SHORT_SIDE = 720;        // screenshots are shrunk to this many pixels on the short side
-    private static final int JPEG_QUALITY = 55;
+    private static final int JPEG_QUALITY = 60;
     private static final long MIN_INTERVAL_MS = 340;  // Android allows one screenshot every 333 ms
+    private static volatile long consentUntil;        // answer the "Start now?" question until then
 
     private final Handler main = new Handler(Looper.getMainLooper());
     private final ExecutorService shots = Executors.newSingleThreadExecutor();
-    private final ExecutorService uploads = Executors.newSingleThreadExecutor();
-    private final java.util.concurrent.atomic.AtomicBoolean uploading = new java.util.concurrent.atomic.AtomicBoolean();
     private volatile boolean running;
     private volatile boolean watching;
+    private volatile boolean screenshots;              // sharing by screenshots instead of video
     private Thread linkThread;
-    private Thread captureThread;
     private PowerManager.WakeLock wakeLock;
     private Prefs prefs;
 
@@ -69,18 +73,15 @@ public class PhoneService extends AccessibilityService {
         instance = this;
         prefs = new Prefs(this);
         running = true;
-        linkThread = new Thread(this::linkLoop, "samantha-link");
+        linkThread = new Thread(this::linkLoop, "mirra-web-link");
         linkThread.start();
     }
-
-    @Override
-    public void onAccessibilityEvent(AccessibilityEvent event) { }
 
     @Override
     public void onInterrupt() { }
 
     @Override
-    public boolean onUnbind(android.content.Intent intent) {
+    public boolean onUnbind(Intent intent) {
         shutdown();
         return super.onUnbind(intent);
     }
@@ -100,7 +101,6 @@ public class PhoneService extends AccessibilityService {
         }
         if (linkThread != null) linkThread.interrupt();
         shots.shutdownNow();
-        uploads.shutdownNow();
     }
 
     /** The UI changed a switch: tell the PC and apply it now. */
@@ -121,7 +121,31 @@ public class PhoneService extends AccessibilityService {
         }).start();
     }
 
-    // -- the link to the PC --------------------------------------------------------------------
+    // -- "Start now?": Android asks before every screen recording ------------------------------------
+    static void expectConsent() {
+        consentUntil = SystemClock.elapsedRealtime() + 15000;
+    }
+
+    @Override
+    public void onAccessibilityEvent(AccessibilityEvent event) {
+        if (SystemClock.elapsedRealtime() > consentUntil || event == null) return;
+        CharSequence pkg = event.getPackageName();
+        if (pkg == null || !pkg.toString().equals("com.android.systemui")) return;
+        AccessibilityNodeInfo root = getRootInActiveWindow();
+        if (root == null) return;
+        // Android 14+: choose "Entire screen" if it offers a choice (CaptureActivity asks for the whole screen anyway)
+        for (AccessibilityNodeInfo n : root.findAccessibilityNodeInfosByText("Entire screen")) {
+            if (n.isClickable()) n.performAction(AccessibilityNodeInfo.ACTION_CLICK);
+        }
+        for (AccessibilityNodeInfo button : root.findAccessibilityNodeInfosByViewId("android:id/button1")) {
+            if (button.isEnabled() && button.performAction(AccessibilityNodeInfo.ACTION_CLICK)) {
+                consentUntil = 0;
+                return;
+            }
+        }
+    }
+
+    // -- the web link to the PC ----------------------------------------------------------------
     private void linkLoop() {
         long backoff = 2000;
         while (running) {
@@ -185,6 +209,7 @@ public class PhoneService extends AccessibilityService {
             info.put("device", Build.MANUFACTURER + " " + Build.MODEL)
                 .put("version", pkg.versionName)
                 .put("control", prefs.control())
+                .put("video", true)
                 .put("width", m.widthPixels)
                 .put("height", m.heightPixels);
         } catch (Exception e) {
@@ -192,7 +217,9 @@ public class PhoneService extends AccessibilityService {
         }
         byte[] answer = Net.request("POST", base + "/api/phone/hello", token, info.toString().getBytes(), "application/json", null, 8000);
         try {
-            prefs.setPc(new JSONObject(new String(answer, "UTF-8")).optString("pc", ""));
+            JSONObject a = new JSONObject(new String(answer, "UTF-8"));
+            prefs.setPc(a.optString("pc", ""));
+            prefs.setRelayPort(a.optInt("relay_port", 0));
         } catch (JSONException ignored) {
             // an older PC: it does not say its name
         }
@@ -204,57 +231,102 @@ public class PhoneService extends AccessibilityService {
             setWatching(c.optBoolean("on") && !prefs.paused());
             return;
         }
-        if (!prefs.control()) return;
-        main.post(() -> {
-            try {
-                perform(type, c);
-            } catch (Exception e) {
-                report("Could not do that: " + e.getMessage());
-            }
-        });
+        live(c);
     }
 
-    // -- showing the screen --------------------------------------------------------------------
+    // -- sharing the screen ----------------------------------------------------------------------
     private synchronized void setWatching(boolean on) {
         if (on == watching) return;
         watching = on;
         if (on) {
             PowerManager pm = (PowerManager) getSystemService(POWER_SERVICE);
-            wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "samantha:watching");
-            wakeLock.acquire(30 * 60 * 1000L);
-            showNotification(true);
-            captureThread = new Thread(this::captureLoop, "samantha-capture");
-            captureThread.start();
+            wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "mirra:watching");
+            wakeLock.acquire(60 * 60 * 1000L);
+            if (prefs.video()) {
+                report("Starting the screen sharing...");
+                main.post(() -> startActivity(new Intent(this, CaptureActivity.class)
+                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_NO_ANIMATION)));
+                // if the recording has not started in time, share screenshots instead
+                main.postDelayed(() -> {
+                    if (watching && !CaptureService.active() && !screenshots) startScreenshots("Screen recording did not start.");
+                }, 15000);
+            } else {
+                startScreenshots(null);
+            }
         } else {
+            screenshots = false;
+            CaptureService.stop();
             if (wakeLock != null && wakeLock.isHeld()) wakeLock.release();
             showNotification(false);
+            report("Connected to " + prefs.pcLabel() + ".");
         }
     }
 
-    private void captureLoop() {
-        while (running && watching && !prefs.paused()) {
-            long started = SystemClock.elapsedRealtime();
-            Frame frame = grab();
-            // Send it while the next one is taken (skip a picture rather than queue them if the network is slow).
-            if (frame != null && uploading.compareAndSet(false, true)) {
-                try {
-                    uploads.execute(() -> {
-                        try {
-                            upload(frame);
-                        } catch (IOException e) {
-                            report("Could not send the screen to the PC: " + Net.explain(e));
-                            pause(1000);
-                        } finally {
-                            uploading.set(false);
-                        }
-                    });
-                } catch (java.util.concurrent.RejectedExecutionException e) {
-                    return;   // shutting down
+    /** CaptureService could not record (refused, failed, or stopped by Android): fall back to screenshots. */
+    static void captureFailed(String why) {
+        PhoneService s = instance;
+        if (s == null) return;
+        s.main.post(() -> {
+            if (s.watching && !s.screenshots) s.startScreenshots(why);
+        });
+    }
+
+    private void startScreenshots(String why) {
+        if (screenshots || !watching) return;
+        screenshots = true;
+        if (why != null) report(why + " Sharing screenshots instead.");
+        showNotification(true);
+        new Thread(this::screenshotLoop, "mirra-screenshots").start();
+    }
+
+    private void screenshotLoop() {
+        Link link = null;
+        try {
+            String base = prefs.server();
+            link = Link.open(Link.host(base), prefs.relayPort(base), prefs.token(), "phone", new Link.Listener() {
+                @Override
+                public void onFrame(char type, byte[] payload) {
+                    if (type != 'I') return;
+                    try {
+                        live(new JSONObject(new String(payload, "UTF-8")));
+                    } catch (Exception ignored) {
+                        // not an input event we understand
+                    }
                 }
+
+                @Override
+                public void onClosed(String why) { }
+            });
+        } catch (IOException e) {
+            link = null;   // an older PC without the live link: upload over the web link
+        }
+        boolean sentInfo = false;
+        try {
+            while (running && watching && screenshots && !prefs.paused()) {
+                long started = SystemClock.elapsedRealtime();
+                Frame frame = grab();
+                if (frame != null) {
+                    try {
+                        if (link != null && link.isOpen()) {
+                            if (!sentInfo) {
+                                link.send('H', ("{\"codec\":\"jpeg\",\"width\":" + frame.width + ",\"height\":" + frame.height
+                                        + ",\"device\":\"" + Build.MANUFACTURER + " " + Build.MODEL + "\"}").getBytes("UTF-8"));
+                                sentInfo = true;
+                            }
+                            link.send('J', frame.jpeg);
+                        } else {
+                            upload(frame);
+                        }
+                    } catch (IOException e) {
+                        report("Could not send the screen to the PC: " + Net.explain(e));
+                        if (!pause(1000)) return;
+                    }
+                }
+                long spent = SystemClock.elapsedRealtime() - started;
+                if (spent < MIN_INTERVAL_MS && !pause(MIN_INTERVAL_MS - spent)) return;
             }
-            if (wakeLock != null && !wakeLock.isHeld()) wakeLock.acquire(30 * 60 * 1000L);
-            long spent = SystemClock.elapsedRealtime() - started;
-            if (spent < MIN_INTERVAL_MS && !pause(MIN_INTERVAL_MS - spent)) return;
+        } finally {
+            if (link != null) link.close();
         }
     }
 
@@ -294,9 +366,7 @@ public class PhoneService extends AccessibilityService {
                 }
             });
             if (!done.await(3, TimeUnit.SECONDS)) return null;
-        } catch (InterruptedException e) {
-            return null;
-        } catch (RuntimeException e) {
+        } catch (InterruptedException | RuntimeException e) {
             return null;
         }
         if (box[1] != null) {
@@ -337,20 +407,33 @@ public class PhoneService extends AccessibilityService {
     private void showNotification(boolean on) {
         NotificationManager nm = getSystemService(NotificationManager.class);
         if (!on) {
-            nm.cancel(1);
+            if (!CaptureService.active()) nm.cancel(1);
             return;
         }
         nm.createNotificationChannel(new NotificationChannel(CHANNEL, "Screen sharing", NotificationManager.IMPORTANCE_LOW));
         Notification n = new Notification.Builder(this, CHANNEL)
                 .setSmallIcon(R.drawable.ic_notify)
                 .setContentTitle("Your PC is viewing this phone")
-                .setContentText("Samantha is sharing this screen with " + prefs.pcLabel() + ".")
+                .setContentText("Mirra is sharing this screen with " + prefs.pcLabel() + ".")
                 .setOngoing(true)
                 .build();
         nm.notify(1, n);
     }
 
     // -- using the phone -----------------------------------------------------------------------
+    /** An input event from the PC (live link or web link). Ignored when the control switch is off. */
+    static void live(JSONObject c) {
+        PhoneService s = instance;
+        if (s == null || !s.prefs.control()) return;
+        s.main.post(() -> {
+            try {
+                s.perform(c.optString("t"), c);
+            } catch (Exception e) {
+                s.report("Could not do that: " + e.getMessage());
+            }
+        });
+    }
+
     private DisplayMetrics realMetrics() {
         DisplayMetrics m = new DisplayMetrics();
         Display d = getSystemService(DisplayManager.class).getDisplay(Display.DEFAULT_DISPLAY);
@@ -360,6 +443,9 @@ public class PhoneService extends AccessibilityService {
 
     private void perform(String type, JSONObject c) throws JSONException {
         switch (type) {
+            case "touch":
+                touch(c.getString("a"), (float) c.getDouble("x"), (float) c.getDouble("y"));
+                break;
             case "tap":
                 swipe(new float[][]{{(float) c.getDouble("x"), (float) c.getDouble("y")}}, 50);
                 break;
@@ -404,6 +490,87 @@ public class PhoneService extends AccessibilityService {
         dispatchGesture(gesture, null, null);
     }
 
+    // A live finger: the PC sends down / move / up as the mouse moves, and the finger follows. Android plays a
+    // stroke piece by piece (continueStroke); the next piece may only start when the previous one has been played.
+    private GestureDescription.StrokeDescription stroke;
+    private float lastX, lastY;
+    private long lastAt;
+    private boolean strokeBusy, upWanted;
+    private final List<float[]> pending = new ArrayList<>();
+
+    private void touch(String action, float fx, float fy) {
+        DisplayMetrics m = realMetrics();
+        float x = pixel(fx, m.widthPixels), y = pixel(fy, m.heightPixels);
+        long now = SystemClock.uptimeMillis();
+        if (action.equals("down")) {
+            pending.clear();
+            upWanted = false;
+            Path p = new Path();
+            p.moveTo(x, y);
+            stroke = new GestureDescription.StrokeDescription(p, 0, 1, true);
+            lastX = x;
+            lastY = y;
+            lastAt = now;
+            play(stroke);
+            return;
+        }
+        if (stroke == null) return;
+        pending.add(new float[]{x, y, now});
+        if (action.equals("up")) upWanted = true;
+        flush();
+    }
+
+    private void flush() {
+        if (strokeBusy || stroke == null || (pending.isEmpty() && !upWanted)) return;
+        Path p = new Path();
+        p.moveTo(lastX, lastY);
+        long at = lastAt;
+        for (float[] pt : pending) {
+            p.lineTo(pt[0], pt[1]);
+            lastX = pt[0];
+            lastY = pt[1];
+            at = (long) pt[2];
+        }
+        if (pending.isEmpty()) p.lineTo(lastX, lastY);
+        long duration = Math.max(1, Math.min(500, at - lastAt));
+        lastAt = Math.max(at, lastAt + duration);
+        pending.clear();
+        boolean more = !upWanted;
+        try {
+            stroke = stroke.continueStroke(p, 0, duration, more);
+        } catch (IllegalStateException | IllegalArgumentException e) {
+            stroke = null;
+            return;
+        }
+        if (!more) upWanted = false;
+        play(stroke);
+        if (!more) stroke = null;
+    }
+
+    private void play(GestureDescription.StrokeDescription s) {
+        strokeBusy = true;
+        GestureDescription g = new GestureDescription.Builder().addStroke(s).build();
+        boolean sent = dispatchGesture(g, new GestureResultCallback() {
+            @Override
+            public void onCompleted(GestureDescription gestureDescription) {
+                strokeBusy = false;
+                flush();
+            }
+
+            @Override
+            public void onCancelled(GestureDescription gestureDescription) {
+                strokeBusy = false;
+                stroke = null;
+                pending.clear();
+                upWanted = false;
+            }
+        }, main);
+        if (!sent) {
+            strokeBusy = false;
+            stroke = null;
+        }
+    }
+
     private void key(String name) {
         switch (name) {
             case "back": performGlobalAction(GLOBAL_ACTION_BACK); break;
@@ -411,11 +578,21 @@ public class PhoneService extends AccessibilityService {
             case "recents": performGlobalAction(GLOBAL_ACTION_RECENTS); break;
             case "notifications": performGlobalAction(GLOBAL_ACTION_NOTIFICATIONS); break;
             case "quicksettings": performGlobalAction(GLOBAL_ACTION_QUICK_SETTINGS); break;
+            case "lock": performGlobalAction(GLOBAL_ACTION_LOCK_SCREEN); break;
+            case "power": performGlobalAction(GLOBAL_ACTION_POWER_DIALOG); break;
+            case "screenshot": performGlobalAction(GLOBAL_ACTION_TAKE_SCREENSHOT); break;
+            case "volup":
+            case "voldown": {
+                AudioManager audio = getSystemService(AudioManager.class);
+                audio.adjustStreamVolume(AudioManager.STREAM_MUSIC,
+                        name.equals("volup") ? AudioManager.ADJUST_RAISE : AudioManager.ADJUST_LOWER, AudioManager.FLAG_SHOW_UI);
+                break;
+            }
             case "wake": {
                 PowerManager pm = (PowerManager) getSystemService(POWER_SERVICE);
                 @SuppressWarnings("deprecation")
                 PowerManager.WakeLock w = pm.newWakeLock(
-                        PowerManager.SCREEN_BRIGHT_WAKE_LOCK | PowerManager.ACQUIRE_CAUSES_WAKEUP, "samantha:wake");
+                        PowerManager.SCREEN_BRIGHT_WAKE_LOCK | PowerManager.ACQUIRE_CAUSES_WAKEUP, "mirra:wake");
                 w.acquire(3000);
                 break;
             }

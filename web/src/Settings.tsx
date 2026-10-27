@@ -118,7 +118,7 @@ export default function Settings({ onClose, onSignOut, current, server, audio, a
         )}
         <Help compact />
         <p className="muted small about">
-          Samantha Screen Mirror {server?.version ? `v${server.version}` : ""}
+          Mirra {server?.version ? `v${server.version}` : ""}
           {server?.capture ? ` · capture: ${server.capture}` : ""}
         </p>
         <button className="danger" onClick={onSignOut}>Forget this device</button>

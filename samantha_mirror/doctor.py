@@ -17,7 +17,7 @@ def run() -> int:
     r = []
 
     _check(r, OK if platform.system() == "Windows" else FAIL, "Windows",
-           platform.platform(), "Samantha Screen Mirror currently supports Windows only.")
+           platform.platform(), "Mirra currently supports Windows only.")
     _check(r, OK if sys.version_info >= (3, 10) else FAIL, "Python 3.10+", platform.python_version(),
            "Install a newer Python from https://www.python.org/downloads/")
 

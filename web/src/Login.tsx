@@ -27,9 +27,9 @@ export default function Login({ onDone }: { onDone: () => void }) {
   return (
     <form className="login" onSubmit={submit}>
       <img src="/icon-192.png" alt="" width={72} height={72} />
-      <h1>Samantha Screen Mirror</h1>
+      <h1>Mirra</h1>
       <p className="muted">
-        See your PC's screen on this phone. <strong>Easiest:</strong> scan the QR code shown by Samantha Screen Mirror on
+        See your PC's screen on this phone. <strong>Easiest:</strong> scan the QR code shown by Mirra on
         your PC. Or paste the access token below. You only sign in once per device.
       </p>
       <input

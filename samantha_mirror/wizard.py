@@ -75,7 +75,7 @@ def phone_instructions(url: str, https: bool) -> None:
     say(f"       Android: {tailscale.PLAY_STORE_URL}")
     say(f"       iPhone:  {tailscale.APP_STORE_URL}")
     say("  2. Make sure Tailscale is switched on in the phone.")
-    say("  3. Android: use the Samantha app. Open Samantha on this PC (the Samantha shortcut, or")
+    say("  3. Android: use the Mirra app. Open Mirra on this PC (the Mirra shortcut, or")
     say("     `samantha-mirror app`): its Home page has the app download and a code to connect.")
     say("     iPhone (or any browser): point the camera at the QR code above and tap the link. It signs you in.")
     if https:
@@ -154,7 +154,7 @@ def setup(yes: bool = False) -> int:
 
     step(4, total, "Start automatically")
     started = False
-    if ask("  Start Samantha Screen Mirror hidden whenever you log in to Windows?", True, yes):
+    if ask("  Start Mirra hidden whenever you log in to Windows?", True, yes):
         try:
             autostart.install(start_now=True)
             started = True

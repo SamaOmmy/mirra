@@ -1,4 +1,5 @@
-"""Samantha Screen Mirror: your Windows PC on your phone, and your Android phone on your PC, over Tailscale."""
+"""Mirra (formerly Samantha Screen Mirror): your Windows PC on your phone, and your Android phone on your PC,
+privately over Tailscale."""
 
-__version__ = "0.5.2"
-APP_NAME = "Samantha Screen Mirror"
+__version__ = "0.6.0"
+APP_NAME = "Mirra"

@@ -22,7 +22,7 @@ class DummyServer:
 def fast(monkeypatch, cfg):
     monkeypatch.setattr(runner.time, "sleep", lambda s: None)
     monkeypatch.setattr(runner, "_wait_for_tailscale", lambda: "100.64.0.1")
-    monkeypatch.setattr(runner, "create_app", lambda cfg: object())
+    monkeypatch.setattr(runner, "create_app", lambda cfg, **kw: object())
     return cfg
 
 

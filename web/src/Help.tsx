@@ -12,13 +12,13 @@ export default function Help({ compact = false }: { compact?: boolean }) {
         <>
           <h3>How do I sign in?</h3>
           <p className="muted">
-            <strong>Android phone?</strong> Use the Samantha app instead of this page: on your PC, open Samantha. Its
+            <strong>Android phone?</strong> Use the Mirra app instead of this page: on your PC, open Mirra. Its
             Home page has the download and a code to connect.
           </p>
           <p className="muted">On an iPhone or in another browser, the sign-in code lives on the PC:</p>
           <ol>
             <li>
-              <strong>On your PC</strong>, open <strong>Samantha</strong>, go to <strong>Settings</strong> and choose{" "}
+              <strong>On your PC</strong>, open <strong>Mirra</strong>, go to <strong>Settings</strong> and choose{" "}
               <strong>Show the link</strong> (under <em>iPhone or a web browser</em>). It shows a <strong>QR code</strong>.
             </li>
             <li>

@@ -38,7 +38,7 @@ jobs:
         if: steps.key.outputs.build == 'true'
         with:
           python-version: "3.12"
-      - run: python -m pip install -e . pyinstaller
+      - run: python -m pip install -e .
         if: steps.key.outputs.build == 'true'
       - name: Tag matches the version in the code
         if: steps.key.outputs.build == 'true' && startsWith(github.ref, 'refs/tags/')
@@ -48,47 +48,34 @@ jobs:
         with:
           distribution: temurin
           java-version: "17"
-      - name: Build the Android app (it ships inside the zip)
+      - name: Inno Setup (for the installer)
+        if: steps.key.outputs.build == 'true'
+        run: choco install innosetup -y --no-progress
+      - name: Build the Windows program, the zips and the installer
         if: steps.key.outputs.build == 'true'
         shell: pwsh
         env:
           KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
-          SM_KEYSTORE_PASS: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEYSTORE_PASS: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
         run: |
           if ($env:KEYSTORE_B64) {
             [IO.File]::WriteAllBytes("$env:RUNNER_TEMP/release.keystore", [Convert]::FromBase64String($env:KEYSTORE_B64))
-            $env:SM_KEYSTORE = "$env:RUNNER_TEMP/release.keystore"
+            Set-Content -NoNewline "$env:RUNNER_TEMP/pass.txt" $env:KEYSTORE_PASS
+          } else {
+            keytool -genkeypair -keystore "$env:RUNNER_TEMP/release.keystore" -storepass throwaway -keypass throwaway `
+              -alias samantha -keyalg RSA -keysize 2048 -validity 30 -dname "CN=test build"
+            Set-Content -NoNewline "$env:RUNNER_TEMP/pass.txt" "throwaway"
           }
-          python android/build.py
-      - run: pyinstaller packaging/samantha.spec --noconfirm --distpath dist --workpath build
-        if: steps.key.outputs.build == 'true'
-      - name: Package
-        if: steps.key.outputs.build == 'true'
-        shell: pwsh
-        run: |
-          Copy-Item packaging/README-FIRST.txt dist/SamanthaScreenMirror/
-          # the Android app is also its own download: the QR code in the Samantha window points at it
-          Copy-Item samantha_mirror/phone_app/SamanthaPhone.apk SamanthaPhone.apk
-          Copy-Item samantha_mirror/phone_app/SamanthaSetup.apk SamanthaSetup.apk
-          Compress-Archive -Path dist/SamanthaScreenMirror -DestinationPath SamanthaScreenMirror-windows.zip
-          # `samantha-mirror update` verifies this before installing the download
-          $hash = (Get-FileHash SamanthaScreenMirror-windows.zip -Algorithm SHA256).Hash.ToLower()
-          "$hash  SamanthaScreenMirror-windows.zip" | Set-Content -Encoding ascii SamanthaScreenMirror-windows.zip.sha256
+          python -m venv .venv
+          .venv/Scripts/python -m pip install -e . pyinstaller
+          ./packaging/build-release.ps1 -Keystore "$env:RUNNER_TEMP/release.keystore" -PasswordFile "$env:RUNNER_TEMP/pass.txt"
       - uses: actions/upload-artifact@v4
         if: steps.key.outputs.build == 'true'
         with:
-          name: SamanthaScreenMirror-windows
-          path: |
-            SamanthaScreenMirror-windows.zip
-            SamanthaScreenMirror-windows.zip.sha256
-            SamanthaPhone.apk
-            SamanthaSetup.apk
+          name: Mirra
+          path: release/*
       - uses: softprops/action-gh-release@v2
         if: steps.key.outputs.build == 'true' && startsWith(github.ref, 'refs/tags/')
         with:
-          files: |
-            SamanthaScreenMirror-windows.zip
-            SamanthaScreenMirror-windows.zip.sha256
-            SamanthaPhone.apk
-            SamanthaSetup.apk
+          files: release/*
           generate_release_notes: true

@@ -19,7 +19,10 @@ import mss
 from waitress import create_server
 
 from . import config, shortcuts, tailscale, updater
+from .auth import Auth
+from .phonelink import PhoneHub
 from .server import create_app
+from .streamrelay import Relay
 
 TAILSCALE_POLL = 10        # seconds between looks for the Tailscale address while it is not up
 TAILSCALE_LOG_EVERY = 300  # how often to repeat the "waiting for Tailscale" log line
@@ -116,12 +119,14 @@ def _watchdog(ip: str, port: int, server, stop: threading.Event, tripped: thread
 def serve_forever(cfg: config.Config) -> int:
     deadline = time.monotonic() + BIND_RETRY_SECONDS
     announced = False
+    # Shared by the web app and the live link (relay), and kept when the listener is rebuilt.
+    auth, hub = Auth(cfg.token), PhoneHub()
     while True:
         ip = _wait_for_tailscale()  # re-read each round: the address can change
         listen = f"{ip}:{cfg.port}" + (f" 127.0.0.1:{cfg.port}" if cfg.loopback else "")
         try:
             # send_bytes=1 so each JPEG frame is flushed immediately instead of buffered.
-            server = create_server(create_app(cfg), listen=listen, threads=2 * cfg.max_clients + 4,
+            server = create_server(create_app(cfg, phone=hub, auth=auth), listen=listen, threads=2 * cfg.max_clients + 4,
                                    send_bytes=1, ident="samantha-mirror", **PROXY_TRUST)
         except OSError as exc:
             if address_not_ready(exc) and time.monotonic() < deadline:
@@ -139,6 +144,13 @@ def serve_forever(cfg: config.Config) -> int:
             print("(Run `samantha-mirror link` for a QR code and the HTTPS address.)  Press Ctrl+C to stop.")
         announced = True
 
+        relay = Relay(auth, hub, cfg.max_clients)
+        try:
+            for host in [ip] + (["127.0.0.1"] if cfg.loopback else []):
+                relay.listen(host, cfg.port + 1)
+        except OSError as exc:
+            log.warning("The live phone link could not listen on port %s (%s); the phone falls back to pictures.",
+                        cfg.port + 1, exc)
         stop, tripped = threading.Event(), threading.Event()
         threading.Thread(target=_watchdog, args=(ip, cfg.port, server, stop, tripped),
                          name="watchdog", daemon=True).start()
@@ -149,6 +161,7 @@ def serve_forever(cfg: config.Config) -> int:
         finally:
             stop.set()
             server.close()
+            relay.close()
         if not tripped.is_set():
             return 0
         deadline = time.monotonic() + BIND_RETRY_SECONDS  # fresh patience for the rebuild

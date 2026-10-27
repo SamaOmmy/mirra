@@ -29,7 +29,7 @@ Live reload against a running server: `$env:SM_TARGET="http://<tailscale-ip>:878
 
 ## The PC window and the Android app
 
-- The Samantha window is `samantha_mirror/desktop.py` (Tkinter, part of Python). Run it with
+- The Mirra window is `samantha_mirror/desktop.py` (CustomTkinter) and the phone window `phonewindow.py`. Run it with
   `.\.venv\Scripts\python.exe -m samantha_mirror app`.
 - The Android app is plain Java in `android/`, built without Gradle by `python android/build.py` (needs a JDK 17+
   and the Android SDK). `tests/test_android.py` builds it and runs its networking code against a real server on the

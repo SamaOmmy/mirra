@@ -1,125 +1,96 @@
-"""The Samantha window on the PC (Samantha.exe).
+"""Mirra on the PC (Mirra.exe): the window.
 
-One place for everything on the PC: first-time setup, turning Samantha on and off, connecting a phone with a code,
-seeing and using the Android phone, sound, and updates. The mirroring itself runs in the background service, so it
-keeps working while this window is closed.
+One place for everything on the PC: first-time setup, turning Mirra on and off, connecting a phone (one QR code),
+the phone window, sound, and updates (a pop-up when a new version is out). Mirra itself runs in the background
+service, so it keeps working while this window is closed.
 
 Tk is single-threaded: anything slow (the network, PowerShell, Tailscale) runs on a worker thread and hands its
 result back through `App.later()`, which the window runs on its own thread.
 """
 import ctypes
-import io
 import os
 import queue
+import shutil
 import sys
 import threading
 import time
 import tkinter as tk
 import webbrowser
-from collections import deque
 from pathlib import Path
-from tkinter import messagebox
+from tkinter import font as tkfont
 
+import customtkinter as ctk
 import qrcode
-from PIL import Image, ImageTk
+from PIL import Image
 
-from . import APP_NAME, __version__, autostart, config, gestures, proc, shortcuts, tailscale, updater
-from .client import Local, Offline, Refused, jpeg_frames
+from . import __version__, autostart, config, proc, shortcuts, tailscale, updater
+from .client import Local, Offline, Refused
 
-TITLE = "Samantha"
-# Samantha Setup installs the app so that Android 13+ does not block its Accessibility switch ("Restricted
-# setting"), which it does for an app installed straight from a downloaded file.
-APK_URL = f"https://github.com/{updater.REPO}/releases/latest/download/SamanthaSetup.apk"
+APP = "Mirra"
+TITLE = "Mirra"
+SETUP_URL = f"https://github.com/{updater.REPO}/releases/latest/download/Mirra-for-Android-Setup.apk"
+TAILSCALE_ANDROID = tailscale.PLAY_STORE_URL
 PROJECT_URL = f"https://github.com/{updater.REPO}"
-LOCK_NAME = r"Local\SamanthaScreenMirrorWindow"
-ICON = Path(__file__).resolve().parent / "app.ico"
+LOCK_NAME = r"Local\MirraWindow"
+ASSETS = Path(__file__).resolve().parent / "assets"
 
-BG, SIDE, CARD, LINE = "#101218", "#0b0d12", "#191c24", "#2a2f3b"
-TEXT, MUTED, ACCENT, ACCENT_HI = "#eceef4", "#9aa1b1", "#8b6cff", "#a08aff"
+BG, SIDE, CARD, CARD2, LINE = "#0b0d12", "#0e1118", "#141721", "#1c2030", "#262b3a"
+TEXT, MUTED, ACCENT, ACCENT_HI, CYAN = "#f1f3f8", "#8e96a8", "#7c5cff", "#8f74ff", "#22d3ee"
 OK, WARN, BAD = "#34d399", "#fbbf24", "#f87171"
 FONT = "Segoe UI"
+# Windows' own icon font (Windows 11, else Windows 10)
+ICONS = {"home": "", "phone": "", "settings": "", "check": "", "sound": "",
+         "update": "", "lock": "", "web": "", "info": "", "power": ""}
 
 
-# -- small widgets ---------------------------------------------------------------------------------
-class Ui:
-    """Sizes in pixels at 100% Windows scaling, multiplied up on high-DPI screens."""
-    scale = 1.0
-
-    @classmethod
-    def px(cls, value: float) -> int:
-        return int(round(value * cls.scale))
+def font(size=13, weight="normal"):
+    return ctk.CTkFont(family=FONT, size=size, weight=weight)
 
 
-def label(parent, text="", size=10, color=TEXT, bold=False, bg=CARD, wrap=0, **kw):
-    font = (FONT + (" Semibold" if bold else ""), size)
-    return tk.Label(parent, text=text, font=font, fg=color, bg=bg, justify="left", anchor="w",
-                    wraplength=Ui.px(wrap) if wrap else 0, **kw)
+def icon_font(root) -> str | None:
+    families = set(tkfont.families(root))
+    for name in ("Segoe Fluent Icons", "Segoe MDL2 Assets"):
+        if name in families:
+            return name
+    return None
 
 
-def button(parent, text, command, kind="primary", bg=CARD):
-    colors = {"primary": (ACCENT, "#ffffff", ACCENT_HI), "plain": (LINE, TEXT, "#353b49"),
-              "danger": ("#3a1d22", BAD, "#4a242b")}[kind]
-    b = tk.Button(parent, text=text, command=command, font=(FONT + " Semibold", 10), fg=colors[1], bg=colors[0],
-                  activebackground=colors[2], activeforeground=colors[1], relief="flat", bd=0, cursor="hand2",
-                  padx=Ui.px(14), pady=Ui.px(6), highlightthickness=0, disabledforeground=MUTED)
-    b.bind("<Enter>", lambda e: b.config(bg=colors[2]) if str(b["state"]) != "disabled" else None)
-    b.bind("<Leave>", lambda e: b.config(bg=colors[0]))
-    return b
+def label(parent, text="", size=13, color=TEXT, weight="normal", wrap=0, **kw):
+    return ctk.CTkLabel(parent, text=text, font=font(size, weight), text_color=color, justify="left", anchor="w",
+                        wraplength=wrap, **kw)
 
 
-def card(parent, title=None):
-    outer = tk.Frame(parent, bg=CARD, highlightbackground=LINE, highlightthickness=1)
-    inner = tk.Frame(outer, bg=CARD)
-    inner.pack(fill="both", expand=True, padx=Ui.px(18), pady=Ui.px(14))
+def button(parent, text, command, kind="primary", width=0, height=40):
+    styles = {"primary": (ACCENT, ACCENT_HI, "#ffffff", 0), "plain": (CARD2, "#262b3e", TEXT, 1),
+              "danger": ("#3a1d22", "#4a242b", BAD, 0), "ghost": ("transparent", CARD2, TEXT, 0)}
+    fg, hover, color, border = styles[kind]
+    return ctk.CTkButton(parent, text=text, command=command, fg_color=fg, hover_color=hover, text_color=color,
+                         border_width=border, border_color=LINE, corner_radius=12, height=height,
+                         width=width or 120, font=font(13, "bold"))
+
+
+def card(parent, title=None, subtitle=None):
+    frame = ctk.CTkFrame(parent, fg_color=CARD, corner_radius=18, border_width=1, border_color=LINE)
+    inner = ctk.CTkFrame(frame, fg_color="transparent")
+    inner.pack(fill="both", expand=True, padx=22, pady=18)
     if title:
-        label(inner, title, 12, bold=True).pack(anchor="w", pady=(0, Ui.px(6)))
-    return outer, inner
+        label(inner, title, 17, weight="bold").pack(anchor="w")
+    if subtitle:
+        label(inner, subtitle, 13, MUTED, wrap=640).pack(anchor="w", pady=(2, 0))
+    return frame, inner
 
 
-class Toggle(tk.Canvas):
-    """An on/off switch."""
-
-    def __init__(self, parent, command, bg=CARD):
-        self.w, self.h = Ui.px(42), Ui.px(24)
-        super().__init__(parent, width=self.w, height=self.h, bg=bg, highlightthickness=0, cursor="hand2")
-        self.on = False
-        self.enabled = True
-        self.command = command
-        self.bind("<Button-1>", self._click)
-        self._draw()
-
-    def set(self, on: bool) -> None:
-        if on != self.on:
-            self.on = on
-            self._draw()
-
-    def enable(self, enabled: bool) -> None:
-        self.enabled = enabled
-        self._draw()
-
-    def _click(self, _event):
-        if self.enabled:
-            self.set(not self.on)
-            self.command(self.on)
-
-    def _draw(self):
-        self.delete("all")
-        w, h, r = self.w, self.h, self.h / 2
-        fill = (ACCENT if self.on else LINE) if self.enabled else "#22262f"
-        self.create_oval(0, 0, h, h, fill=fill, outline=fill)
-        self.create_oval(w - h, 0, w, h, fill=fill, outline=fill)
-        self.create_rectangle(r, 0, w - r, h, fill=fill, outline=fill)
-        pad = Ui.px(3)
-        x = w - h + pad if self.on else pad
-        self.create_oval(x, pad, x + h - 2 * pad, h - pad, fill="#ffffff" if self.enabled else MUTED, outline="")
+def switch(parent, command, text=""):
+    return ctk.CTkSwitch(parent, text=text, command=command, progress_color=ACCENT, button_color="#ffffff",
+                         button_hover_color="#e8e8f0", fg_color="#3a3f4b", font=font(13), text_color=TEXT)
 
 
-def qr_image(text: str, size: int) -> ImageTk.PhotoImage:
-    qr = qrcode.QRCode(border=2, box_size=8, error_correction=qrcode.constants.ERROR_CORRECT_M)
+def qr_image(text: str, size: int) -> ctk.CTkImage:
+    qr = qrcode.QRCode(border=2, box_size=10, error_correction=qrcode.constants.ERROR_CORRECT_M)
     qr.add_data(text)
     qr.make(fit=True)
-    img = qr.make_image(fill_color="black", back_color="white").get_image().convert("RGB")
-    return ImageTk.PhotoImage(img.resize((size, size), Image.NEAREST))
+    img = qr.make_image(fill_color="#0b0d12", back_color="white").get_image().convert("RGB")
+    return ctk.CTkImage(light_image=img, dark_image=img, size=(size, size))
 
 
 def ago(timestamp: float) -> str:
@@ -131,9 +102,24 @@ def ago(timestamp: float) -> str:
     return time.strftime("%H:%M", time.localtime(timestamp))
 
 
+def tailscale_info() -> dict:
+    info = {"installed": bool(tailscale.find_cli()), "state": "", "ip": "", "name": ""}
+    if not info["installed"]:
+        return info
+    try:
+        st = tailscale.status()
+        info["state"] = tailscale.backend_state(st)
+        info["name"] = tailscale.dns_name(st).split(".")[0]
+        if info["state"] == "Running":
+            info["ip"] = tailscale.tailscale_ip()
+    except tailscale.BindError:
+        info["state"] = "Stopped"
+    return info
+
+
 # -- the window ------------------------------------------------------------------------------------
 class App:
-    def __init__(self, root: tk.Tk):
+    def __init__(self, root: ctk.CTk):
         self.root = root
         self.closing = False
         self._calls: queue.Queue = queue.Queue()
@@ -142,34 +128,43 @@ class App:
         self._snap_lock = threading.Lock()
         self.local: Local | None = None
         self.release: updater.Release | None = None
-        self.busy = ""   # what a long action is doing right now ("" when idle)
+        self.offered = ""          # the version already offered in a pop-up
+        self.busy = ""             # what a long action is doing right now ("" when idle)
+        self.phone_window = None
+        self.icons = icon_font(root)
 
         root.title(TITLE)
-        root.configure(bg=BG)
-        width = min(Ui.px(1080), root.winfo_screenwidth() - Ui.px(40))
-        height = min(Ui.px(720), root.winfo_screenheight() - Ui.px(90))
-        root.geometry(f"{width}x{height}+{max(0, (root.winfo_screenwidth() - width) // 2)}+{Ui.px(10)}")
-        root.minsize(min(width, Ui.px(820)), min(height, Ui.px(520)))
-        if ICON.exists():
+        root.configure(fg_color=BG)
+        # screen size in CustomTkinter's units (Tk reports real pixels once the process is DPI aware)
+        scale = ctk.ScalingTracker.get_window_scaling(root) if root.winfo_fpixels("1i") > 100 else 1.0
+        sw, sh = root.winfo_screenwidth() / scale, root.winfo_screenheight() / scale
+        width, height = int(min(1140, sw - 40)), int(min(780, sh - 90))
+        root.geometry(f"{width}x{height}+{int(max(0, (sw - width) / 2))}+10")
+        root.minsize(min(width, 900), min(height, 560))
+        if (ASSETS / "mirra.ico").exists():
             try:
-                root.iconbitmap(default=str(ICON))
+                root.iconbitmap(default=str(ASSETS / "mirra.ico"))
             except tk.TclError:
                 pass
 
-        side = tk.Frame(root, bg=SIDE, width=Ui.px(200))
+        side = ctk.CTkFrame(root, fg_color=SIDE, corner_radius=0, width=236)
         side.pack(side="left", fill="y")
         side.pack_propagate(False)
-        label(side, "Samantha", 17, bold=True, bg=SIDE).pack(anchor="w", padx=Ui.px(20), pady=(Ui.px(22), 0))
-        label(side, "Screen Mirror", 10, MUTED, bg=SIDE).pack(anchor="w", padx=Ui.px(20), pady=(0, Ui.px(22)))
-        self.nav: dict[str, tk.Label] = {}
+        brand = ctk.CTkFrame(side, fg_color="transparent")
+        brand.pack(anchor="w", padx=22, pady=(26, 30))
+        logo = Image.open(ASSETS / "mirra-256.png")
+        ctk.CTkLabel(brand, text="", image=ctk.CTkImage(logo, logo, size=(42, 42))).pack(side="left")
+        names = ctk.CTkFrame(brand, fg_color="transparent")
+        names.pack(side="left", padx=12)
+        label(names, "Mirra", 22, weight="bold").pack(anchor="w")
+        label(names, "PC and phone, as one", 11, MUTED).pack(anchor="w")
+        self.nav: dict[str, ctk.CTkFrame] = {}
         for key, text in (("home", "Home"), ("phone", "My phone"), ("settings", "Settings")):
-            item = label(side, text, 11, MUTED, bg=SIDE, cursor="hand2", padx=Ui.px(20), pady=Ui.px(9))
-            item.pack(fill="x")
-            item.bind("<Button-1>", lambda e, k=key: self.show(k))
-            self.nav[key] = item
-        label(side, f"v{__version__}", 9, MUTED, bg=SIDE).pack(side="bottom", anchor="w", padx=Ui.px(20), pady=Ui.px(16))
+            self.nav[key] = self._nav_item(side, key, text)
+        self.version_label = label(side, f"Version {__version__}", 11, MUTED)
+        self.version_label.pack(side="bottom", anchor="w", padx=24, pady=18)
 
-        self.body = tk.Frame(root, bg=BG)
+        self.body = ctk.CTkFrame(root, fg_color=BG, corner_radius=0)
         self.body.pack(side="left", fill="both", expand=True)
         self.pages = {"setup": SetupPage(self), "home": HomePage(self), "phone": PhonePage(self),
                       "settings": SettingsPage(self)}
@@ -180,9 +175,32 @@ class App:
         threading.Thread(target=self._poll, name="status", daemon=True).start()
         if self.local and self.local.cfg.update_check:
             self.check_updates(quiet=True)
+            root.after(6 * 3600 * 1000, self._recheck)
+        if getattr(sys, "frozen", False):
+            self.background(shortcuts.update)   # older versions' shortcuts open this window
+            self.background(autostart.adopt, lambda moved, _e: moved and self.refresh_soon(slow=True))
         root.protocol("WM_DELETE_WINDOW", self.close)
-        root.bind_all("<MouseWheel>", lambda e: self.pages[self.current].wheel(e) if self.current else None)
         root.after(100, self._pump)
+
+    def _nav_item(self, side, key, text):
+        item = ctk.CTkFrame(side, fg_color="transparent", corner_radius=12, height=46, cursor="hand2")
+        item.pack(fill="x", padx=12, pady=2)
+        item.pack_propagate(False)
+        glyph = ctk.CTkLabel(item, text=ICONS[key] if self.icons else "", width=28,
+                             font=ctk.CTkFont(family=self.icons or FONT, size=16), text_color=MUTED)
+        glyph.pack(side="left", padx=(14, 6))
+        name = label(item, text, 14, MUTED, weight="bold")
+        name.pack(side="left")
+        for w in (item, glyph, name):
+            w.bind("<Button-1>", lambda e, k=key: self.show(k))
+            w.bind("<Enter>", lambda e, k=key: self._nav_hover(k, True))
+            w.bind("<Leave>", lambda e, k=key: self._nav_hover(k, False))
+        item.parts = (glyph, name)
+        return item
+
+    def _nav_hover(self, key, on):
+        if key != self.current:
+            self.nav[key].configure(fg_color=CARD if on else "transparent")
 
     # -- plumbing ----------------------------------------------------------------------------------
     def later(self, fn, *args) -> None:
@@ -212,7 +230,7 @@ class App:
                 snap = dict(self.snap)
             self.pages[self.current].refresh(snap)
         if not self.closing:
-            self.root.after(150, self._pump)
+            self.root.after(200, self._pump)
 
     def _open_client(self) -> None:
         try:
@@ -273,24 +291,45 @@ class App:
             self.pages[self.current].hide()
         self.current = key
         for k, item in self.nav.items():
-            item.config(fg=TEXT if k == key else MUTED, bg="#191c24" if k == key else SIDE)
+            selected = k == key
+            item.configure(fg_color=CARD2 if selected else "transparent")
+            for part in item.parts:
+                part.configure(text_color=TEXT if selected else MUTED)
+            if selected and self.icons:
+                item.parts[0].configure(text_color=CYAN)
         self.pages[key].show()
 
     def close(self):
         self.closing = True
-        self.pages["phone"].hide()
+        if self.phone_window is not None and self.phone_window.winfo_exists():
+            self.phone_window.close()
         self.root.destroy()
 
-    # -- actions used by several pages ---------------------------------------------------------------
+    def open_phone(self):
+        from .phonewindow import open_window
+        if not self.local:
+            return
+        phone = self.snap.get("phone") or {}
+        open_window(self, self.local, phone.get("device", ""), (phone.get("width", 0), phone.get("height", 0)))
+
+    # -- updates -----------------------------------------------------------------------------------
+    def _recheck(self):
+        if not self.closing:
+            self.check_updates(quiet=True)
+            self.root.after(6 * 3600 * 1000, self._recheck)
+
     def check_updates(self, quiet=False):
         def done(release, error):
             if error:
                 if not quiet:
-                    messagebox.showinfo(TITLE, f"Could not check for updates: {error}")
+                    UpdateDialog.message(self, "Could not check for updates", str(error))
                 return
             self.release = release
-            if not quiet and not release:
-                messagebox.showinfo(TITLE, f"You have the newest version (v{__version__}).")
+            if release and release.version != self.offered:
+                self.offered = release.version
+                UpdateDialog(self, release)
+            elif not quiet and not release:
+                UpdateDialog.message(self, "You're up to date", f"Mirra {__version__} is the newest version.")
         self.background(updater.available, done)
 
     def install_update(self):
@@ -301,7 +340,7 @@ class App:
         if mode == "other":
             webbrowser.open(release.url)
             return
-        self.busy = f"Downloading version {release.version}..."
+        self.busy = f"Downloading Mirra {release.version}..."
 
         def work():
             if mode == "exe":
@@ -314,12 +353,11 @@ class App:
         def done(result, error):
             self.busy = ""
             if error:
-                messagebox.showerror(TITLE, f"The update did not work: {error}")
+                UpdateDialog.message(self, "The update did not work", str(error))
             elif result == "exe":
-                # The new version is swapped in once this window is gone, and then it opens again by itself.
-                self.close()
+                self.close()   # the new version is swapped in once this window is gone, then it opens again
             else:
-                messagebox.showinfo(TITLE, f"Updated to v{release.version}. Close this window and open it again.")
+                UpdateDialog.message(self, "Updated", f"Mirra {release.version} is installed. Close this window and open it again.")
         self.background(work, done)
 
     def restart_service(self, why: str):
@@ -330,57 +368,86 @@ class App:
             self._open_client()
             self.refresh_soon(slow=True)
             if error:
-                messagebox.showerror(TITLE, str(error))
+                UpdateDialog.message(self, "Something went wrong", str(error))
         self.background(lambda: updater.restart_service() or None, done)
 
 
-def tailscale_info() -> dict:
-    info = {"installed": bool(tailscale.find_cli()), "state": "", "ip": "", "name": ""}
-    if not info["installed"]:
-        return info
-    try:
-        st = tailscale.status()
-        info["state"] = tailscale.backend_state(st)
-        info["name"] = tailscale.dns_name(st).split(".")[0]
-        if info["state"] == "Running":
-            info["ip"] = tailscale.tailscale_ip()
-    except tailscale.BindError:
-        info["state"] = "Stopped"
-    return info
+class UpdateDialog:
+    """The pop-up: a new version is out. Also used for short messages."""
+
+    def __init__(self, app: App, release):
+        self.app = app
+        win = self.win = self._window(app, "Update available")
+        body = ctk.CTkFrame(win, fg_color="transparent")
+        body.pack(fill="both", expand=True, padx=28, pady=24)
+        top = ctk.CTkFrame(body, fg_color="transparent")
+        top.pack(fill="x")
+        logo = Image.open(ASSETS / "mirra-256.png")
+        ctk.CTkLabel(top, text="", image=ctk.CTkImage(logo, logo, size=(54, 54))).pack(side="left")
+        titles = ctk.CTkFrame(top, fg_color="transparent")
+        titles.pack(side="left", padx=14)
+        label(titles, f"Mirra {release.version} is here", 19, weight="bold").pack(anchor="w")
+        label(titles, f"You have {__version__}. Updating takes about a minute.", 13, MUTED).pack(anchor="w")
+        notes = [ln.strip("-* ").strip() for ln in release.notes.splitlines() if ln.strip().startswith(("-", "*"))][:4]
+        if notes:
+            box = ctk.CTkFrame(body, fg_color=CARD, corner_radius=14)
+            box.pack(fill="x", pady=(18, 0))
+            for n in notes:
+                label(box, "•  " + n.replace("**", "")[:140], 12, TEXT, wrap=430).pack(anchor="w", padx=16, pady=3)
+        label(body, "Mirra restarts by itself and your phone reconnects. Phones get their matching update next.",
+              12, MUTED, wrap=460).pack(anchor="w", pady=(14, 0))
+        row = ctk.CTkFrame(body, fg_color="transparent")
+        row.pack(fill="x", pady=(18, 0))
+        button(row, "Update now", self._update, width=150).pack(side="right")
+        button(row, "Later", win.destroy, "ghost", width=100).pack(side="right", padx=8)
+        button(row, "What's new", lambda: webbrowser.open(release.url), "ghost", width=110).pack(side="left")
+
+    @staticmethod
+    def _window(app, title):
+        win = ctk.CTkToplevel(app.root)
+        win.title(title)
+        win.configure(fg_color=BG)
+        win.resizable(False, False)
+        win.transient(app.root)
+        win.after(200, lambda: (win.lift(), win.focus_force()))
+        if (ASSETS / "mirra.ico").exists():
+            win.after(250, lambda: win.iconbitmap(str(ASSETS / "mirra.ico")))
+        app.root.update_idletasks()
+        x = app.root.winfo_rootx() + app.root.winfo_width() // 2 - 260
+        y = app.root.winfo_rooty() + 120
+        win.geometry(f"+{max(0, x)}+{max(0, y)}")
+        return win
+
+    def _update(self):
+        self.win.destroy()
+        self.app.install_update()
+
+    @staticmethod
+    def message(app, title, text):
+        win = UpdateDialog._window(app, title)
+        body = ctk.CTkFrame(win, fg_color="transparent")
+        body.pack(fill="both", expand=True, padx=28, pady=24)
+        label(body, title, 18, weight="bold").pack(anchor="w")
+        label(body, text, 13, MUTED, wrap=420).pack(anchor="w", pady=(6, 0))
+        button(body, "OK", win.destroy, width=100).pack(anchor="e", pady=(18, 0))
 
 
 # -- pages -----------------------------------------------------------------------------------------
 class Page:
     title = ""
-    scrolls = True   # the page scrolls when it is taller than the window
+    scrolls = True
 
     def __init__(self, app: App):
         self.app = app
-        self.frame = tk.Frame(app.body, bg=BG)
-        self.content = self.frame
         if self.scrolls:
-            self.canvas = tk.Canvas(self.frame, bg=BG, highlightthickness=0)
-            self.bar = tk.Scrollbar(self.frame, orient="vertical", command=self.canvas.yview)
-            self.content = tk.Frame(self.canvas, bg=BG)
-            inside = self.canvas.create_window(0, 0, window=self.content, anchor="nw")
-            self.canvas.configure(yscrollcommand=self._scrolled)
-            self.content.bind("<Configure>", lambda e: self.canvas.configure(scrollregion=self.canvas.bbox("all")))
-            self.canvas.bind("<Configure>", lambda e: self.canvas.itemconfigure(inside, width=e.width))
-            self.canvas.pack(side="left", fill="both", expand=True)
+            self.frame = ctk.CTkScrollableFrame(app.body, fg_color=BG, corner_radius=0,
+                                                scrollbar_button_color=CARD2, scrollbar_button_hover_color=LINE)
+        else:
+            self.frame = ctk.CTkFrame(app.body, fg_color=BG, corner_radius=0)
+        self.content = self.frame
         if self.title:
-            label(self.content, self.title, 20, bold=True, bg=BG).pack(anchor="w", padx=Ui.px(28), pady=(Ui.px(24), Ui.px(12)))
+            label(self.content, self.title, 28, weight="bold").pack(anchor="w", padx=32, pady=(28, 16))
         self.build()
-
-    def _scrolled(self, first, last):
-        if float(first) <= 0 and float(last) >= 1:
-            self.bar.pack_forget()
-        elif not self.bar.winfo_ismapped():
-            self.bar.pack(side="right", fill="y", before=self.canvas)
-        self.bar.set(first, last)
-
-    def wheel(self, event):
-        if self.scrolls and self.bar.winfo_ismapped():
-            self.canvas.yview_scroll(int(-event.delta / 120) * 3, "units")
 
     def build(self):
         pass
@@ -394,36 +461,34 @@ class Page:
     def refresh(self, snap: dict):
         pass
 
-    def section(self, title=None, **pack):
-        outer, inner = card(self.content, title)
-        outer.pack(fill="x", padx=Ui.px(28), pady=(0, Ui.px(14)), **pack)
+    def section(self, title=None, subtitle=None):
+        outer, inner = card(self.content, title, subtitle)
+        outer.pack(fill="x", padx=32, pady=(0, 16))
         return inner
 
 
 class SetupPage(Page):
-    title = "Welcome to Samantha"
+    title = "Welcome to Mirra"
 
     def build(self):
-        label(self.content, "Samantha shows this PC on your phone, and your Android phone on this PC. Everything goes "
+        label(self.content, "Mirra shows this PC on your phone, and your Android phone on this PC. Everything goes "
               "straight between your own devices through Tailscale, a free private network. No cloud, no accounts "
-              "with us.", 10, MUTED, bg=BG, wrap=720).pack(anchor="w", padx=Ui.px(28), pady=(0, Ui.px(16)))
+              "with us.", 14, MUTED, wrap=720).pack(anchor="w", padx=32, pady=(0, 18))
+        box = self.section("1   Tailscale", "The private network between your PC and your phone.")
+        self.ts_text = label(box, "Checking...", 13, MUTED, wrap=680)
+        self.ts_text.pack(anchor="w", pady=(10, 0))
+        row = ctk.CTkFrame(box, fg_color="transparent")
+        row.pack(anchor="w", pady=(12, 0))
+        self.install_btn = button(row, "Install Tailscale", self.install_tailscale, width=160)
+        self.install_btn.pack(side="left", padx=(0, 8))
+        button(row, "Check again", lambda: self.app.refresh_soon(slow=True), "plain", width=120).pack(side="left")
 
-        box = self.section("1.  Tailscale")
-        self.ts_text = label(box, "Checking...", 10, MUTED, wrap=700)
-        self.ts_text.pack(anchor="w")
-        row = tk.Frame(box, bg=CARD)
-        row.pack(anchor="w", pady=(Ui.px(10), 0))
-        self.install_btn = button(row, "Install Tailscale", self.install_tailscale)
-        self.install_btn.pack(side="left", padx=(0, Ui.px(8)))
-        button(row, "Check again", lambda: self.app.refresh_soon(slow=True), "plain").pack(side="left")
-
-        box = self.section("2.  Start Samantha")
-        label(box, "Samantha runs quietly in the background and starts by itself when you sign in to Windows. "
-              "You can turn it off at any time.", 10, MUTED, wrap=700).pack(anchor="w")
-        self.start_btn = button(box, "Start Samantha", self.start)
-        self.start_btn.pack(anchor="w", pady=(Ui.px(10), 0))
-        self.start_text = label(box, "", 10, MUTED, wrap=700)
-        self.start_text.pack(anchor="w", pady=(Ui.px(6), 0))
+        box = self.section("2   Start Mirra", "Mirra runs quietly in the background and starts with Windows. "
+                           "You can turn it off at any time.")
+        self.start_btn = button(box, "Start Mirra", self.start, width=160)
+        self.start_btn.pack(anchor="w", pady=(12, 0))
+        self.start_text = label(box, "", 13, MUTED, wrap=680)
+        self.start_text.pack(anchor="w", pady=(6, 0))
 
     def refresh(self, snap):
         ts = snap.get("tailscale")
@@ -437,14 +502,13 @@ class SetupPage(Page):
                            "menu or the tray, sign in, then click Check again."), WARN
         else:
             text, color = f"Connected as {ts['name'] or ts['ip']} ({ts['ip']}).", OK
-        self.ts_text.config(text=text, fg=color)
-        self.install_btn.config(state="disabled" if ts and ts["installed"] else "normal")
-        self.start_btn.config(state="normal" if running and not self.app.busy else "disabled")
+        self.ts_text.configure(text=text, text_color=color)
+        self.install_btn.configure(state="disabled" if ts and ts["installed"] else "normal")
+        self.start_btn.configure(state="normal" if running and not self.app.busy else "disabled")
         if self.app.busy:
-            self.start_text.config(text=self.app.busy)
+            self.start_text.configure(text=self.app.busy)
 
     def install_tailscale(self):
-        import shutil
         if not shutil.which("winget"):
             webbrowser.open(tailscale.DOWNLOAD_URL)
             return
@@ -470,7 +534,7 @@ class SetupPage(Page):
         def done(_result, error):
             self.app.busy = ""
             if error:
-                self.start_text.config(text=f"Could not start it: {error}", fg=BAD)
+                self.start_text.configure(text=f"Could not start it: {error}", text_color=BAD)
                 return
             self.app._open_client()
             self.app.refresh_soon(slow=True)
@@ -482,71 +546,96 @@ class HomePage(Page):
     title = "Home"
 
     def build(self):
+        # status
         box = self.section()
-        row = tk.Frame(box, bg=CARD)
+        row = ctk.CTkFrame(box, fg_color="transparent")
         row.pack(fill="x")
-        self.dot = tk.Canvas(row, width=Ui.px(14), height=Ui.px(14), bg=CARD, highlightthickness=0)
-        self.dot.pack(side="left", padx=(0, Ui.px(10)))
-        texts = tk.Frame(row, bg=CARD)
+        self.dot = label(row, "●", 22, MUTED)
+        self.dot.pack(side="left", padx=(0, 12))
+        texts = ctk.CTkFrame(row, fg_color="transparent")
         texts.pack(side="left", fill="x", expand=True)
-        self.state_text = label(texts, "Checking...", 13, bold=True)
+        self.state_text = label(texts, "Checking...", 19, weight="bold")
         self.state_text.pack(anchor="w")
-        self.state_sub = label(texts, "", 10, MUTED, wrap=560)
+        self.state_sub = label(texts, "", 13, MUTED, wrap=560)
         self.state_sub.pack(anchor="w")
-        self.power = button(row, "Turn off", self.toggle_power, "plain")
+        self.power = switch(row, self.toggle_power)
         self.power.pack(side="right")
+        self.power_busy = False
 
-        box = self.section("Connect a phone")
-        cols = tk.Frame(box, bg=CARD)
-        cols.pack(fill="x")
-        left = tk.Frame(cols, bg=CARD)
-        left.pack(side="left", anchor="n", padx=(0, Ui.px(28)))
-        self.apk_qr = qr_image(APK_URL, Ui.px(150))
-        tk.Label(left, image=self.apk_qr, bg=CARD).pack(anchor="w")
-        label(left, "1. Get the app", 10, bold=True).pack(anchor="w", pady=(Ui.px(8), 0))
-        label(left, "Scan with your Android phone's camera and\ninstall Samantha Setup. Open it and tap\nInstall Samantha.", 9, MUTED).pack(anchor="w")
-        link = label(left, "Or copy the download link", 9, ACCENT, cursor="hand2")
-        link.pack(anchor="w")
-        link.bind("<Button-1>", lambda e: self.copy(APK_URL, "Download link copied."))
+        # connect a phone
+        box = self.section("Connect a phone", "Pair once; your phone remembers this PC.")
+        cols = ctk.CTkFrame(box, fg_color="transparent")
+        cols.pack(fill="x", pady=(16, 0))
+        qr_box = ctk.CTkFrame(cols, fg_color="#ffffff", corner_radius=16)
+        qr_box.pack(side="left", anchor="n")
+        self.qr = ctk.CTkLabel(qr_box, text="Waiting for Mirra...", text_color="#1d1650", width=200, height=200)
+        self.qr.pack(padx=10, pady=10)
+        self.qr_for = None
+        steps = ctk.CTkFrame(cols, fg_color="transparent")
+        steps.pack(side="left", fill="x", expand=True, padx=(26, 0))
+        self._step(steps, "1", "Put Tailscale on your phone", "Sign in with the same account as this PC and switch it on.",
+                   ("Tailscale for Android", TAILSCALE_ANDROID))
+        self._step(steps, "2", "Scan this code with the phone's camera",
+                   "It installs Mirra if needed and connects by itself.")
+        ctk.CTkFrame(steps, fg_color=LINE, height=1).pack(fill="x", pady=(14, 10))
+        label(steps, "No camera? In the Mirra app, type:", 12, MUTED).pack(anchor="w")
+        pills = ctk.CTkFrame(steps, fg_color="transparent")
+        pills.pack(anchor="w", pady=(6, 0))
+        self.name_pill = self._pill(pills, "PC", "-")
+        self.code_pill = self._pill(pills, "Code", "--- ---")
+        self.code_sub = label(steps, "", 12, MUTED)
+        self.code_sub.pack(anchor="w", pady=(6, 0))
+        self.asked_code = 0.0
 
-        right = tk.Frame(cols, bg=CARD)
-        right.pack(side="left", anchor="n", fill="x", expand=True)
-        label(right, "2. In the app, type", 10, bold=True).pack(anchor="w")
-        label(right, "This PC", 9, MUTED).pack(anchor="w", pady=(Ui.px(8), 0))
-        self.address = label(right, "-", 20, bold=True)
-        self.address.pack(anchor="w")
-        self.address_sub = label(right, "", 9, MUTED)
-        self.address_sub.pack(anchor="w")
-        label(right, "Code", 9, MUTED).pack(anchor="w", pady=(Ui.px(10), 0))
-        code_row = tk.Frame(right, bg=CARD)
-        code_row.pack(anchor="w", fill="x")
-        self.code = label(code_row, "------", 26, bold=True)
-        self.code.pack(side="left")
-        self.code_btn = button(code_row, "Show a code", self.new_code)
-        self.code_btn.pack(side="left", padx=Ui.px(18))
-        self.code_sub = label(right, "A code works for 10 minutes. The app remembers this PC after that.", 9, MUTED)
-        self.code_sub.pack(anchor="w")
-        self.paired = label(right, "", 10, OK)
-        self.paired.pack(anchor="w", pady=(Ui.px(8), 0))
+        # the phone
+        box = self.section()
+        row = ctk.CTkFrame(box, fg_color="transparent")
+        row.pack(fill="x")
+        glyph = self.app.icons
+        ctk.CTkLabel(row, text=ICONS["phone"] if glyph else "", text_color=CYAN,
+                     font=ctk.CTkFont(family=glyph or FONT, size=26)).pack(side="left", padx=(0, 14))
+        texts = ctk.CTkFrame(row, fg_color="transparent")
+        texts.pack(side="left", fill="x", expand=True)
+        self.phone_title = label(texts, "No phone yet", 16, weight="bold")
+        self.phone_title.pack(anchor="w")
+        self.phone_sub = label(texts, "Connect one above.", 13, MUTED, wrap=520)
+        self.phone_sub.pack(anchor="w")
+        self.open_btn = button(row, "Open phone window", self.app.open_phone, width=180, height=42)
+        self.open_btn.pack(side="right")
 
-        self.update_box = self.section("Update available")
-        self.update_text = label(self.update_box, "", 10, MUTED, wrap=700)
-        self.update_text.pack(anchor="w")
-        row = tk.Frame(self.update_box, bg=CARD)
-        row.pack(anchor="w", pady=(Ui.px(10), 0))
-        self.update_btn = button(row, "Update now", self.app.install_update)
-        self.update_btn.pack(side="left", padx=(0, Ui.px(8)))
-        button(row, "What's new", lambda: webbrowser.open(self.app.release.url) if self.app.release else None,
-               "plain").pack(side="left")
+        self.update_box = self.section()
+        row = ctk.CTkFrame(self.update_box, fg_color="transparent")
+        row.pack(fill="x")
+        self.update_text = label(row, "", 14, TEXT, weight="bold")
+        self.update_text.pack(side="left")
+        button(row, "Update now", self.app.install_update, width=130).pack(side="right")
         self.update_box.master.pack_forget()
 
-        label(self.content, "Closing this window does not stop Samantha. Use Turn off for that.", 9, MUTED,
-              bg=BG).pack(anchor="w", padx=Ui.px(28))
+        label(self.content, "Closing this window does not stop Mirra; it keeps running in the background.", 12,
+              MUTED).pack(anchor="w", padx=34, pady=(0, 20))
 
-    def copy(self, text, message):
-        self.app.root.clipboard_clear()
-        self.app.root.clipboard_append(text)
-        self.code_sub.config(text=message)
+    def _step(self, parent, number, title, text, link=None):
+        row = ctk.CTkFrame(parent, fg_color="transparent")
+        row.pack(fill="x", pady=(0, 12))
+        badge = ctk.CTkLabel(row, text=number, width=30, height=30, corner_radius=15, fg_color=ACCENT,
+                             text_color="#ffffff", font=font(13, "bold"))
+        badge.pack(side="left", anchor="n", padx=(0, 12))
+        texts = ctk.CTkFrame(row, fg_color="transparent")
+        texts.pack(side="left", fill="x", expand=True)
+        label(texts, title, 14, weight="bold").pack(anchor="w")
+        label(texts, text, 13, MUTED, wrap=420).pack(anchor="w")
+        if link:
+            a = label(texts, link[0], 13, CYAN, cursor="hand2")
+            a.pack(anchor="w")
+            a.bind("<Button-1>", lambda e: webbrowser.open(link[1]))
+
+    def _pill(self, parent, name, value):
+        pill = ctk.CTkFrame(parent, fg_color=CARD2, corner_radius=12, border_width=1, border_color=LINE)
+        pill.pack(side="left", padx=(0, 10))
+        label(pill, name, 11, MUTED).pack(anchor="w", padx=14, pady=(8, 0))
+        v = label(pill, value, 20, weight="bold")
+        v.pack(anchor="w", padx=14, pady=(0, 8))
+        return v
 
     def refresh(self, snap):
         app = self.app
@@ -556,66 +645,75 @@ class HomePage(Page):
         if app.busy:
             color, title, sub = WARN, app.busy, ""
         elif auto == "disabled":
-            color, title, sub = MUTED, "Samantha is off", "Your phone can't see this PC, and this PC can't see your phone."
+            color, title, sub = MUTED, "Mirra is off", "Your phone can't see this PC, and this PC can't see your phone."
         elif server:
-            color, title = OK, "Samantha is on"
-            sub = "Your phone can see this PC from anywhere through Tailscale."
+            color, title, sub = OK, "Mirra is on", "Your phone can reach this PC from anywhere through Tailscale."
             if server.get("error"):
                 color, sub = WARN, f"The screen can't be captured right now: {server['error']}"
         elif ts and ts.get("state") not in (None, "", "Running"):
             color, title, sub = WARN, "Waiting for Tailscale", "Open Tailscale and sign in or switch it on."
         elif snap.get("server_error") == "refused":
-            color, title, sub = BAD, "Samantha did not accept this window", "Its settings changed. Close this window and open it again."
+            color, title, sub = BAD, "Mirra did not accept this window", "Its settings changed. Close this window and open it again."
         else:
             color, title, sub = WARN, "Starting...", "It can take a minute after Windows starts."
-        self.dot.delete("all")
-        self.dot.create_oval(1, 1, Ui.px(13), Ui.px(13), fill=color, outline="")
-        self.state_text.config(text=title)
-        self.state_sub.config(text=sub)
-        self.power.config(text="Turn on" if auto == "disabled" else "Turn off",
-                          state="disabled" if app.busy else "normal")
+        self.dot.configure(text_color=color)
+        self.state_text.configure(text=title)
+        self.state_sub.configure(text=sub)
+        if not self.power_busy:
+            (self.power.deselect if auto == "disabled" else self.power.select)()
+        self.power.configure(state="disabled" if app.busy else "normal")
 
-        if ts.get("ip"):
-            port = app.local.cfg.port if app.local else config.DEFAULT_PORT
-            self.address.config(text=ts["ip"] + ("" if port == config.DEFAULT_PORT else f":{port}"))
-            self.address_sub.config(text=f"or the name: {ts['name']}" if ts.get("name") else "")
-        pair = (snap.get("pair") or {})
+        # pairing: keep a fresh code (and its QR code) whenever this page is open
+        port = app.local.cfg.port if app.local else config.DEFAULT_PORT
+        name = ts.get("name") or ts.get("ip") or "-"
+        self.name_pill.configure(text=name if port == config.DEFAULT_PORT else f"{name}:{port}")
+        pair = snap.get("pair") or {}
         code = pair.get("code")
-        if code:
+        if server and (not code or code["expires_in"] < 90) and time.monotonic() - self.asked_code > 8:
+            self.asked_code = time.monotonic()
+            app.background(lambda: app.local.post("/api/pair/code"), lambda *_: app.refresh_soon())
+        if code and ts.get("ip"):
             c = code["code"]
-            self.code.config(text=f"{c[:3]} {c[3:]}", fg=TEXT)
-            self.code_btn.config(text="New code")
-            minutes, seconds = divmod(code["expires_in"], 60)
-            self.code_sub.config(text=f"Works for {minutes}:{seconds:02d} more. The app remembers this PC after that.")
+            self.code_pill.configure(text=f"{c[:3]} {c[3:]}")
+            self.code_sub.configure(text="The code changes every few minutes; the phone only needs it once.")
+            url = f"http://{ts['ip']}:{port}/join?c={c}"
+            if url != self.qr_for:
+                self.qr_for = url
+                self.qr.configure(image=qr_image(url, 200), text="")
         else:
-            self.code.config(text="--- ---", fg=MUTED)
-            self.code_btn.config(text="Show a code")
-        self.code_btn.config(state="normal" if server else "disabled")
+            self.code_pill.configure(text="--- ---")
+            if not server:
+                self.qr.configure(image=None, text="Mirra is not\nrunning yet")
+                self.qr_for = None
+
         phone = snap.get("phone") or {}
         paired = pair.get("paired") or []
         if phone.get("connected"):
-            self.paired.config(text=f"Connected: {phone.get('device') or 'your phone'}. See it under My phone.", fg=OK)
-        elif paired:
-            last = paired[-1]
-            self.paired.config(text=f"Paired: {last['device']} ({ago(last['at'])})", fg=OK)
+            self.phone_title.configure(text=phone.get("device") or "Your phone")
+            version = phone.get("app_version") or ""
+            self.phone_sub.configure(text="Connected. Open its window to see it and use it with your mouse."
+                                     + (f"   App {version}" if version else ""), text_color=OK)
+            self.open_btn.configure(state="normal")
         else:
-            self.paired.config(text="")
+            self.phone_title.configure(text="No phone connected")
+            hint = f"Last paired: {paired[-1]['device']} ({ago(paired[-1]['at'])}). " if paired else ""
+            self.phone_sub.configure(text=hint + "Open Mirra on your phone and switch on \"Let the PC see this phone\".",
+                                     text_color=MUTED)
+            self.open_btn.configure(state="normal" if server else "disabled")
 
         release = app.release
         if release:
-            self.update_text.config(text=f"Version {release.version} is ready (you have {__version__}). "
-                                    "Updating takes about a minute; Samantha restarts by itself and phones reconnect.")
-            self.update_btn.config(state="disabled" if app.busy else "normal")
+            self.update_text.configure(text=f"Mirra {release.version} is available  (you have {__version__})")
             if not self.update_box.master.winfo_ismapped():
-                self.update_box.master.pack(fill="x", padx=Ui.px(28), pady=(0, Ui.px(14)),
-                                            before=self.content.winfo_children()[-1])
+                self.update_box.master.pack(fill="x", padx=32, pady=(0, 16), before=self.content.winfo_children()[-1])
         elif self.update_box.master.winfo_ismapped():
             self.update_box.master.pack_forget()
 
     def toggle_power(self):
         app = self.app
-        turning_on = app.snap.get("autostart") == "disabled"
+        turning_on = bool(self.power.get())
         app.busy = "Turning on..." if turning_on else "Turning off..."
+        self.power_busy = True
 
         def work():
             if turning_on:
@@ -628,377 +726,176 @@ class HomePage(Page):
 
         def done(_result, error):
             app.busy = ""
+            self.power_busy = False
             app.refresh_soon(slow=True)
             if error:
-                messagebox.showerror(TITLE, str(error))
+                UpdateDialog.message(app, "Could not do that", str(error))
         app.background(work, done)
-
-    def new_code(self):
-        def done(_result, error):
-            if error:
-                messagebox.showerror(TITLE, f"Could not make a code: {error}")
-            self.app.refresh_soon()
-        self.app.background(lambda: self.app.local.post("/api/pair/code"), done)
 
 
 class PhonePage(Page):
-    """The phone's screen, live, and the mouse and keyboard to use it."""
-    scrolls = False
+    title = "My phone"
 
     def build(self):
-        head = tk.Frame(self.frame, bg=BG)
-        head.pack(fill="x", padx=Ui.px(28), pady=(Ui.px(24), Ui.px(12)))
-        label(head, "My phone", 20, bold=True, bg=BG).pack(side="left")
-        self.status = label(head, "", 10, MUTED, bg=BG)
-        self.status.pack(side="left", padx=Ui.px(16), pady=(Ui.px(6), 0))
-
-        main = tk.Frame(self.frame, bg=BG)
-        main.pack(fill="both", expand=True, padx=Ui.px(28), pady=(0, Ui.px(20)))
-        self.canvas = tk.Canvas(main, bg="#05060a", highlightthickness=1, highlightbackground=LINE, cursor="hand2",
-                                takefocus=1)
-        self.canvas.pack(side="left", fill="both", expand=True)
-        side = tk.Frame(main, bg=BG, width=Ui.px(230))
-        side.pack(side="left", fill="y", padx=(Ui.px(16), 0))
-        side.pack_propagate(False)
-
-        _, box = card(side)
-        box.master.pack(fill="x")
-        self.device = label(box, "No phone yet", 12, bold=True, wrap=190)
+        from .phonewindow import BITRATES, QUALITY, load_prefs
+        self.prefs = load_prefs()
+        hero = ctk.CTkFrame(self.content, fg_color="#241a66", corner_radius=20)
+        hero.pack(fill="x", padx=32, pady=(0, 16))
+        inner = ctk.CTkFrame(hero, fg_color="transparent")
+        inner.pack(fill="x", padx=26, pady=24)
+        self.device = label(inner, "No phone connected", 22, "#ffffff", weight="bold")
         self.device.pack(anchor="w")
-        self.device_sub = label(box, "", 9, MUTED, wrap=190)
-        self.device_sub.pack(anchor="w")
+        self.device_sub = label(inner, "", 13, "#d6d9f5", wrap=620)
+        self.device_sub.pack(anchor="w", pady=(2, 14))
+        self.open_btn = ctk.CTkButton(inner, text="Open phone window", command=self.app.open_phone, fg_color="#ffffff",
+                                      hover_color="#e9e6ff", text_color="#241a66", corner_radius=14, height=48,
+                                      width=220, font=font(15, "bold"))
+        self.open_btn.pack(anchor="w")
 
-        _, keys = card(side, "Buttons")
-        keys.master.pack(fill="x", pady=(Ui.px(12), 0))
-        grid = tk.Frame(keys, bg=CARD)
-        grid.pack(fill="x")
-        for i, (text, name) in enumerate((("Back", "back"), ("Home", "home"), ("Recent apps", "recents"),
-                                          ("Notifications", "notifications"), ("Quick settings", "quicksettings"),
-                                          ("Wake screen", "wake"))):
-            b = button(grid, text, lambda n=name: self.send({"t": "key", "k": n}), "plain")
-            b.config(padx=Ui.px(6), font=(FONT, 9))
-            b.grid(row=i // 2, column=i % 2, sticky="ew", padx=Ui.px(2), pady=Ui.px(2))
-        grid.columnconfigure(0, weight=1)
-        grid.columnconfigure(1, weight=1)
-        row = tk.Frame(keys, bg=CARD)
-        row.pack(fill="x", pady=(Ui.px(10), 0))
-        self.view_only = Toggle(row, lambda on: self.canvas.config(cursor="arrow" if on else "hand2"))
-        self.view_only.pack(side="left")
-        label(row, "View only", 10).pack(side="left", padx=Ui.px(8))
+        box = self.section("Picture", "Sharper and smoother needs a faster connection. On mobile data choose 720p.")
+        self._choice(box, "Sharpness", list(QUALITY), self.prefs["size"], "size")
+        self._choice(box, "Smoothness", ["30 fps", "60 fps"], f"{self.prefs['fps']} fps", "fps")
+        self._choice(box, "Quality", list(BITRATES), self.prefs["bitrate"], "bitrate")
 
-        label(side, "Click to tap, hold for a long press, drag to swipe, use the wheel to scroll and type on "
-              "your keyboard (click the phone first). Esc is Back.", 9, MUTED, bg=BG, wrap=220).pack(anchor="w", pady=Ui.px(12))
+        box = self.section("Using the phone from this PC")
+        for keys, what in (("Click", "Tap"), ("Hold and drag", "Swipe, scroll, draw: your mouse is a finger"),
+                           ("Mouse wheel", "Scroll"), ("Right click  or  Esc", "Back"), ("Middle click", "Home"),
+                           ("Type", "Types on the phone (click a text field on the phone first)"),
+                           ("Ctrl + V", "Pastes this PC's clipboard on the phone")):
+            row = ctk.CTkFrame(box, fg_color="transparent")
+            row.pack(fill="x", pady=3)
+            label(row, keys, 13, CYAN, weight="bold", width=180).pack(side="left")
+            label(row, what, 13, TEXT).pack(side="left")
+        label(box, "The phone shares its screen only while the phone window is open, and shows a notification then.",
+              12, MUTED, wrap=640).pack(anchor="w", pady=(10, 0))
 
-        self.stream = PhoneStream(self.app)
-        self.pointer = gestures.Pointer()
-        self.outbox: queue.Queue = queue.Queue()
-        self.typed = ""
-        self.photo = None
-        self.shown_seq = -1
-        self.shown_size = (0, 0)
-        self.rect = (0, 0, 0, 0)
-        self.send_error = ""
-        threading.Thread(target=self._sender, name="phone-input", daemon=True).start()
+    def _choice(self, parent, name, values, current, key):
+        row = ctk.CTkFrame(parent, fg_color="transparent")
+        row.pack(fill="x", pady=(12, 0))
+        label(row, name, 13, MUTED, weight="bold", width=120).pack(side="left")
+        seg = ctk.CTkSegmentedButton(row, values=values, command=lambda v, k=key: self._set(k, v),
+                                     selected_color=ACCENT, selected_hover_color=ACCENT_HI, unselected_color=CARD2,
+                                     unselected_hover_color=LINE, fg_color=CARD2, text_color=TEXT, font=font(13, "bold"),
+                                     corner_radius=10, height=36)
+        seg.set(current)
+        seg.pack(side="left")
 
-        c = self.canvas
-        c.bind("<ButtonPress-1>", self._down)
-        c.bind("<B1-Motion>", self._move)
-        c.bind("<ButtonRelease-1>", self._up)
-        c.bind("<MouseWheel>", self._wheel)
-        c.bind("<Key>", self._key)
-        c.bind("<Configure>", lambda e: self._draw(force=True))
-        self.app.root.bind("<Unmap>", lambda e: self.stream.stop() if e.widget is self.app.root else None)
-        self.app.root.bind("<Map>", lambda e: self.stream.start() if e.widget is self.app.root and self.visible else None)
-        self.visible = False
-        self._tick()
-
-    def show(self):
-        super().show()
-        self.visible = True
-        self.stream.start()
-        self.canvas.focus_set()
-
-    def hide(self):
-        super().hide()
-        self.visible = False
-        self.stream.stop()
-
-    # -- picture -------------------------------------------------------------------------------------
-    def _tick(self):
-        if self.visible:
-            self._draw()
-        if not self.app.closing:
-            self.app.root.after(40, self._tick)
-
-    def _draw(self, force=False):
-        image, seq = self.stream.latest()
-        cw, ch = self.canvas.winfo_width(), self.canvas.winfo_height()
-        if image is None or cw < 20 or ch < 20 or (seq == self.shown_seq and (cw, ch) == self.shown_size and not force):
-            return
-        self.shown_seq, self.shown_size = seq, (cw, ch)
-        scale = min((cw - 16) / image.width, (ch - 16) / image.height)
-        w, h = max(1, int(image.width * scale)), max(1, int(image.height * scale))
-        x0, y0 = (cw - w) // 2, (ch - h) // 2
-        self.photo = ImageTk.PhotoImage(image.resize((w, h), Image.BILINEAR))
-        self.canvas.delete("picture")
-        self.canvas.create_image(x0, y0, image=self.photo, anchor="nw", tags="picture")
-        self.canvas.tag_raise("message")
-        self.rect = (x0, y0, w, h)
-
-    def _message(self, text: str):
-        c = self.canvas
-        c.delete("message")
-        if not text:
-            return
-        cw, ch = c.winfo_width(), c.winfo_height()
-        c.create_rectangle(0, ch // 2 - Ui.px(70), cw, ch // 2 + Ui.px(70), fill="#05060a", outline="", tags="message")
-        c.create_text(cw // 2, ch // 2, text=text, fill=TEXT, font=(FONT, 11), width=min(cw - 40, Ui.px(460)),
-                      justify="center", tags="message")
+    def _set(self, key, value):
+        from .phonewindow import quality_message, save_prefs
+        self.prefs[key] = int(value.split()[0]) if key == "fps" else value
+        save_prefs(self.prefs)
+        win = self.app.phone_window
+        if win is not None and win.winfo_exists():
+            win.prefs = dict(self.prefs)
+            win.link.send(b"C", quality_message(self.prefs))
 
     def refresh(self, snap):
         phone = snap.get("phone") or {}
-        if not snap.get("server"):
-            self.device.config(text="Samantha is not running")
-            self.device_sub.config(text="Turn it on under Home.")
-            self._message("Samantha is not running on this PC. Turn it on under Home.")
-            self.status.config(text="")
-            return
-        if not phone.get("connected"):
-            self.device.config(text="No phone connected")
-            self.device_sub.config(text="")
-            self._message("No phone is connected.\n\nOn your Android phone open Samantha, pair it with this PC "
-                          "(Home shows how), and switch on \"Let this PC see and use my phone\".")
-            self.status.config(text="")
-            return
-        self.device.config(text=phone.get("device") or "Your phone")
-        control = phone.get("control", True)
-        self.device_sub.config(text=("You can tap, swipe and type." if control else
-                                     "The phone allows viewing only (its own switch).") +
-                               (f"\nApp version {phone['app_version']}" if phone.get("app_version") else ""))
-        fps = self.stream.fps()
-        if self.stream.latest()[0] is None:
-            self._message("Waiting for the first picture from the phone...")
+        server = snap.get("server")
+        if not server:
+            self.device.configure(text="Mirra is not running")
+            self.device_sub.configure(text="Turn it on under Home.")
+            self.open_btn.configure(state="disabled")
+        elif phone.get("connected"):
+            self.device.configure(text=phone.get("device") or "Your phone")
+            self.device_sub.configure(text="Connected. The window opens at the phone's own shape; you can resize it."
+                                      if phone.get("control", True) else
+                                      "Connected, view only: the phone does not allow tapping (its own switch).")
+            self.open_btn.configure(state="normal")
         else:
-            self._message("")
-        self.status.config(text=(f"{fps:.1f} fps" if fps else "") + (f"   {self.send_error}" if self.send_error else ""))
-
-    # -- input --------------------------------------------------------------------------------------
-    def _where(self, event) -> tuple[float, float] | None:
-        x0, y0, w, h = self.rect
-        if not w or not h:
-            return None
-        return (event.x - x0) / w, (event.y - y0) / h
-
-    def _usable(self) -> bool:
-        return not self.view_only.on and self.stream.latest()[0] is not None
-
-    def _down(self, event):
-        self.canvas.focus_set()
-        pos = self._where(event)
-        if pos and self._usable() and 0 <= pos[0] <= 1 and 0 <= pos[1] <= 1:
-            self.pointer.down(*pos, time.monotonic() * 1000)
-
-    def _move(self, event):
-        pos = self._where(event)
-        if pos and self.pointer.active:
-            self.pointer.move(*pos, time.monotonic() * 1000)
-
-    def _up(self, event):
-        pos = self._where(event)
-        if pos and self.pointer.active:
-            action = self.pointer.up(*pos, time.monotonic() * 1000)
-            if action:
-                self.send(action)
-
-    def _wheel(self, event):
-        pos = self._where(event)
-        if pos and self._usable() and 0 <= pos[0] <= 1 and 0 <= pos[1] <= 1:
-            self.send(gestures.wheel(pos[0], pos[1], event.delta / 120))
-
-    def _key(self, event):
-        if not self._usable():
-            return
-        what = gestures.key(event.keysym, event.char)
-        if not what:
-            return
-        kind, value = what
-        if kind == "key":
-            self._flush_text()
-            self.send({"t": "key", "k": value})
-            return
-        if not self.typed:
-            self.app.root.after(150, self._flush_text)
-        self.typed += value
-
-    def _flush_text(self):
-        if self.typed:
-            text, self.typed = self.typed[:500], self.typed[500:]
-            self.send({"t": "text", "s": text})
-
-    def send(self, event: dict):
-        if not self.view_only.on:
-            self.outbox.put(event)
-
-    def _sender(self):
-        while True:
-            event = self.outbox.get()
-            try:
-                self.app.local.post("/api/phone/input", event)
-                self.send_error = ""
-            except Refused as exc:
-                self.send_error = str(exc)
-            except (Offline, AttributeError):
-                self.send_error = "Samantha is not running."
-
-
-class PhoneStream:
-    """Receives the phone's pictures while the My phone page is on screen (the phone only sends them then)."""
-
-    def __init__(self, app: App):
-        self.app = app
-        self._lock = threading.Lock()
-        self._image = None
-        self._seq = 0
-        self._times: deque = deque(maxlen=30)
-        self._active = False
-        self._resp = None
-        self._thread = None
-
-    def start(self):
-        with self._lock:
-            if self._active:
-                return
-            self._active = True
-            if self._thread is None or not self._thread.is_alive():
-                self._thread = threading.Thread(target=self._run, name="phone-picture", daemon=True)
-                self._thread.start()
-
-    def stop(self):
-        with self._lock:
-            self._active = False
-            resp, self._resp = self._resp, None
-        if resp is not None:
-            try:
-                resp.close()   # ends the request, so the phone is told nobody is looking
-            except Exception:
-                pass
-
-    def latest(self):
-        with self._lock:
-            return self._image, self._seq
-
-    def fps(self) -> float:
-        with self._lock:
-            times = [t for t in self._times if time.monotonic() - t < 3]
-        return (len(times) - 1) / (times[-1] - times[0]) if len(times) > 2 and times[-1] > times[0] else 0.0
-
-    def _run(self):
-        while self._active:
-            local = self.app.local
-            try:
-                if local is None:
-                    raise Offline("not set up")
-                resp = local.stream("/api/phone/stream", timeout=20)
-                with self._lock:
-                    if not self._active:
-                        resp.close()
-                        return
-                    self._resp = resp
-                for jpeg in jpeg_frames(resp):
-                    image = Image.open(io.BytesIO(jpeg))
-                    image.load()
-                    with self._lock:
-                        if not self._active:
-                            break
-                        self._image = image
-                        self._seq += 1
-                        self._times.append(time.monotonic())
-            except Exception:
-                pass
-            finally:
-                with self._lock:
-                    resp, self._resp = self._resp, None
-                if resp is not None:
-                    try:
-                        resp.close()
-                    except Exception:
-                        pass
-            if self._active:
-                time.sleep(1)
+            self.device.configure(text="No phone connected")
+            self.device_sub.configure(text="Open Mirra on your phone. Under \"This phone on your PC\", switch it on. "
+                                      "Not paired yet? Scan the code on Home.")
+            self.open_btn.configure(state="normal")
 
 
 class SettingsPage(Page):
     title = "Settings"
 
     def build(self):
-        box = self.section("Sound")
-        row = tk.Frame(box, bg=CARD)
-        row.pack(fill="x")
-        self.sound = Toggle(row, self.set_sound)
-        self.sound.pack(side="left")
-        label(row, "Let my phone hear this PC's sound", 10).pack(side="left", padx=Ui.px(10))
-        label(box, "Each phone also switches sound on in its own app, and the PC records nothing while no phone "
-              "listens. Changing this restarts Samantha for a moment.", 9, MUTED, wrap=700).pack(anchor="w", pady=(Ui.px(6), 0))
+        box = self.section("Sound", "Each phone switches sound on in its own app; the PC records nothing while no "
+                           "phone listens.")
+        self.sound = switch(box, self.set_sound, "Let phones hear this PC's sound")
+        self.sound.pack(anchor="w", pady=(12, 0))
 
-        box = self.section("Phones")
-        label(box, "Sign out every paired phone, for example after losing one. They need a new code to connect again.",
-              10, MUTED, wrap=700).pack(anchor="w")
-        button(box, "Sign out all phones", self.sign_out_all, "danger").pack(anchor="w", pady=(Ui.px(10), 0))
+        box = self.section("Updates", "Mirra checks for a new version every few hours and shows a pop-up when one is out.")
+        self.auto_update = switch(box, self.set_auto_update, "Check for updates automatically")
+        self.auto_update.pack(anchor="w", pady=(12, 0))
+        if not self.app.local or self.app.local.cfg.update_check:
+            self.auto_update.select()
+        row = ctk.CTkFrame(box, fg_color="transparent")
+        row.pack(anchor="w", pady=(12, 0))
+        button(row, "Check now", lambda: self.app.check_updates(), "plain", width=130).pack(side="left")
+        self.version = label(row, f"   You have Mirra {__version__}", 13, MUTED)
+        self.version.pack(side="left")
 
-        box = self.section("iPhone or a web browser")
-        label(box, "There is no iPhone app. An iPhone (or any browser in your tailnet) can still watch this PC: "
-              "scan this link with its camera. The link contains your secret key, so only show it to your own devices.",
-              10, MUTED, wrap=700).pack(anchor="w")
-        button(box, "Show the link", self.show_browser_link, "plain").pack(anchor="w", pady=(Ui.px(10), 0))
+        box = self.section("Phones", "Sign out every paired phone, for example after losing one. They need to scan the "
+                           "code again to connect.")
+        button(box, "Sign out all phones", self.sign_out_all, "danger", width=180).pack(anchor="w", pady=(12, 0))
+
+        box = self.section("iPhone or a web browser", "There is no iPhone app, but an iPhone (or any browser in your "
+                           "tailnet) can still watch this PC. The link contains your secret key: only show it to your "
+                           "own devices.")
+        button(box, "Show the link", self.show_browser_link, "plain", width=150).pack(anchor="w", pady=(12, 0))
 
         box = self.section("About")
-        self.about = label(box, f"{APP_NAME} v{__version__}", 10)
-        self.about.pack(anchor="w")
-        row = tk.Frame(box, bg=CARD)
-        row.pack(anchor="w", pady=(Ui.px(10), 0))
-        button(row, "Check for updates", lambda: self.app.check_updates(), "plain").pack(side="left", padx=(0, Ui.px(8)))
-        button(row, "Open the log folder", lambda: os.startfile(config.data_dir()), "plain").pack(side="left", padx=(0, Ui.px(8)))
-        button(row, "Project page", lambda: webbrowser.open(PROJECT_URL), "plain").pack(side="left")
+        label(box, f"Mirra {__version__}. Free and open source (MIT).", 13, MUTED).pack(anchor="w", pady=(4, 0))
+        row = ctk.CTkFrame(box, fg_color="transparent")
+        row.pack(anchor="w", pady=(12, 0))
+        button(row, "Open the log folder", lambda: os.startfile(config.data_dir()), "plain", width=170).pack(side="left", padx=(0, 8))
+        button(row, "Project page", lambda: webbrowser.open(PROJECT_URL), "plain", width=140).pack(side="left")
 
     def refresh(self, snap):
         server = snap.get("server") or {}
         audio = server.get("audio")
         if audio is not None and not self.app.busy:
-            self.sound.set(bool(audio.get("enabled")))
-        self.sound.enable(bool(server) and not self.app.busy)
-        extra = f"   {self.app.busy}" if self.app.busy else ""
-        self.about.config(text=f"{APP_NAME} v{__version__}{extra}")
+            (self.sound.select if audio.get("enabled") else self.sound.deselect)()
+        self.sound.configure(state="normal" if server and not self.app.busy else "disabled")
+        self.version.configure(text=f"   You have Mirra {__version__}" + (f"   {self.app.busy}" if self.app.busy else ""))
 
-    def set_sound(self, on: bool):
-        config.set_env_value("SM_AUDIO", "1" if on else "0")
-        self.app.restart_service("Restarting Samantha...")
+    def set_sound(self):
+        config.set_env_value("SM_AUDIO", "1" if self.sound.get() else "0")
+        self.app.restart_service("Restarting Mirra...")
+
+    def set_auto_update(self):
+        config.set_env_value("SM_UPDATE_CHECK", "1" if self.auto_update.get() else "0")
 
     def sign_out_all(self):
-        if not messagebox.askyesno(TITLE, "Sign out all phones? Each one needs a new code from Home to connect again."):
-            return
-        config.set_env_value("SM_TOKEN", config.new_token())
-        self.app.restart_service("Signing out all phones...")
+        win = UpdateDialog._window(self.app, "Sign out all phones?")
+        body = ctk.CTkFrame(win, fg_color="transparent")
+        body.pack(fill="both", expand=True, padx=28, pady=24)
+        label(body, "Sign out all phones?", 18, weight="bold").pack(anchor="w")
+        label(body, "Every phone needs to scan the code on Home again to connect.", 13, MUTED, wrap=380).pack(anchor="w", pady=(6, 0))
+        row = ctk.CTkFrame(body, fg_color="transparent")
+        row.pack(fill="x", pady=(18, 0))
+
+        def go():
+            win.destroy()
+            config.set_env_value("SM_TOKEN", config.new_token())
+            self.app.restart_service("Signing out all phones...")
+        button(row, "Sign out all", go, "danger", width=140).pack(side="right")
+        button(row, "Cancel", win.destroy, "ghost", width=100).pack(side="right", padx=8)
 
     def show_browser_link(self):
         local = self.app.local
         ts = self.app.snap.get("tailscale") or {}
         if not local or not ts.get("ip"):
-            messagebox.showinfo(TITLE, "Samantha needs Tailscale to be on first.")
+            UpdateDialog.message(self.app, "Tailscale is off", "Mirra needs Tailscale to be on first.")
             return
         url = f"http://{ts['ip']}:{local.cfg.port}/?token={local.cfg.token}"
-        win = tk.Toplevel(self.app.root, bg=CARD)
-        win.title("Link for a browser")
-        win.resizable(False, False)
-        photo = qr_image(url, Ui.px(260))
-        tk.Label(win, image=photo, bg=CARD).pack(padx=Ui.px(24), pady=(Ui.px(24), Ui.px(8)))
-        win.photo = photo
-        label(win, "Scan with the iPhone camera (Tailscale must be on there).\nAfter that, add it to the Home Screen "
-              "from Safari's Share menu.", 9, MUTED).pack(padx=Ui.px(24))
+        win = UpdateDialog._window(self.app, "Link for a browser")
+        body = ctk.CTkFrame(win, fg_color="transparent")
+        body.pack(fill="both", expand=True, padx=28, pady=24)
+        qr_box = ctk.CTkFrame(body, fg_color="#ffffff", corner_radius=16)
+        qr_box.pack()
+        ctk.CTkLabel(qr_box, text="", image=qr_image(url, 240)).pack(padx=10, pady=10)
+        label(body, "Scan with the iPhone camera (Tailscale must be on there). Then, in Safari, Share > Add to "
+              "Home Screen.", 12, MUTED, wrap=300).pack(pady=(12, 0))
 
         def copy():
             win.clipboard_clear()
             win.clipboard_append(url)
-        button(win, "Copy the link", copy, "plain").pack(pady=Ui.px(16))
+        button(body, "Copy the link", copy, "plain", width=150).pack(pady=(12, 0))
 
 
 # -- start ----------------------------------------------------------------------------------------
@@ -1025,12 +922,12 @@ def main() -> int:
     if sys.platform == "win32":
         if _already_open():
             return 0
-        try:
-            ctypes.windll.shcore.SetProcessDpiAwareness(1)
+        try:   # sharp text on scaled screens; CustomTkinter then scales the layout itself
+            ctypes.windll.shcore.SetProcessDpiAwareness(2)
         except Exception:
             pass
-    root = tk.Tk()
-    Ui.scale = max(1.0, root.winfo_fpixels("1i") / 96)
+    ctk.set_appearance_mode("dark")
+    root = ctk.CTk()
     App(root)
     root.mainloop()
     return 0

@@ -153,13 +153,15 @@ def main():
         fail("No Android platform (android.jar) installed in the SDK.")
     android_jar = platform / "android.jar"
     name = version()
-    print(f"Samantha for Android {name}: build-tools {build_tools.name}, {platform.name}")
+    print(f"Mirra for Android {name}: build-tools {build_tools.name}, {platform.name}")
 
     build_apk(build_tools, android_jar, name, HERE, OUT)
     with tempfile.TemporaryDirectory(prefix="samantha-setup-assets-") as assets:
         shutil.copy(OUT, Path(assets) / "Samantha.apk")   # Setup installs this copy
         build_apk(build_tools, android_jar, name, HERE / "setup", SETUP_OUT,
-                  extra_res=[HERE / "res" / "drawable" / "icon.xml"], assets=Path(assets))
+                  extra_res=[HERE / "res" / "drawable" / f"{n}.xml" for n in
+                             ("ic_launcher_background", "ic_launcher_foreground", "ic_launcher_monochrome", "logo")]
+                  + [HERE / "res" / "mipmap-anydpi" / "ic_launcher.xml"], assets=Path(assets))
 
 
 if __name__ == "__main__":

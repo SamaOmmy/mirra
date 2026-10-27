@@ -430,13 +430,13 @@ public class ViewerActivity extends Activity implements ScreenView.Listener, Sou
                 ContentValues v = new ContentValues();
                 v.put(MediaStore.Images.Media.DISPLAY_NAME, "PC screenshot " + System.currentTimeMillis() + ".png");
                 v.put(MediaStore.Images.Media.MIME_TYPE, "image/png");
-                v.put(MediaStore.Images.Media.RELATIVE_PATH, Environment.DIRECTORY_PICTURES + "/Samantha");
+                v.put(MediaStore.Images.Media.RELATIVE_PATH, Environment.DIRECTORY_PICTURES + "/Mirra");
                 Uri uri = getContentResolver().insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, v);
                 if (uri == null) throw new java.io.IOException("no room for it");
                 try (OutputStream out = getContentResolver().openOutputStream(uri)) {
                     out.write(png);
                 }
-                main.post(() -> Toast.makeText(this, "Saved in Pictures/Samantha.", Toast.LENGTH_LONG).show());
+                main.post(() -> Toast.makeText(this, "Saved in Pictures/Mirra.", Toast.LENGTH_LONG).show());
             } catch (Exception e) {
                 main.post(() -> Toast.makeText(this, "No screenshot: " + Net.explain(e), Toast.LENGTH_LONG).show());
             }

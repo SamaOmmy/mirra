@@ -1,145 +1,132 @@
-# Samantha Screen Mirror
+<p align="center"><img src="docs/logo.png" width="120" alt="Mirra"></p>
 
-**Your Windows PC on your phone, and your Android phone on your PC.** From anywhere, privately. No accounts, no
-cloud, no port forwarding: everything goes straight between your own devices through your own
-[Tailscale](https://tailscale.com) network.
+<h1 align="center">Mirra</h1>
 
-There are two apps, and they talk to each other:
-
-- **Samantha for Windows**, a window on your PC. It runs quietly in the background and starts with Windows.
-- **Samantha for Android**, an app on your phone.
-
-| On the phone | On the PC |
-|---|---|
-| **Show my PC**: watch your PC screen live, full screen, pinch to zoom, up to 60 fps | **My phone**: see your phone live and use it with the mouse and keyboard |
-| Hear the PC's sound (if you switch it on) | Click to tap, drag to swipe, scroll with the wheel, type on the keyboard |
-| Screenshots of the PC, quality presets, screen picker | Back, Home, Recent apps, Notifications buttons, a View-only switch |
+<p align="center"><b>Your PC on your phone. Your phone on your PC.</b><br>
+Private, from anywhere, no cloud. Free and open source.</p>
 
 <p align="center">
-  <img src="docs/screenshots/pc-phone.png" width="560" alt="The Samantha window on the PC showing an Android phone">
-  <img src="docs/screenshots/android-home.png" width="200" alt="The Samantha app on Android">
+  <img src="docs/screenshots/pc-myphone.png" width="520" alt="Mirra on Windows">
+  <img src="docs/screenshots/pc-phone-window.png" width="180" alt="A phone in the phone window on the PC">
+  <img src="docs/screenshots/android-home.png" width="200" alt="Mirra on Android">
 </p>
 
-## What is it for?
+Mirra is two apps that work together: **Mirra for Windows** on your PC and **Mirra for Android** on your phone.
 
-- Check on a **long download, render, export, backup or install** without walking back to the desk
-- Keep an eye on a **home or work PC** that is running something while you are out
-- **Read something** on the big screen from the couch (pinch to zoom), or listen to what the PC is playing
-- **Answer a message or use an app on your phone from the PC**, with a real keyboard, while the phone stays in your bag
+- **See your PC on your phone**, live and full screen, with its sound if you want it. Pinch to zoom, take screenshots.
+- **See and use your phone on your PC**, in its own phone-shaped window, smooth (up to 60 pictures a second) and
+  sharp. Your mouse is your finger, your keyboard types on the phone.
+- **Private**: everything goes straight between your own devices through [Tailscale](https://tailscale.com), a free
+  private network. Nobody else, including this project, can see anything.
 
-What it is **not**: the phone can only *look at* the PC (no clicking or typing on the PC, on purpose, which makes it
-much safer); it is not for sharing your screen with other people; and it is not a cloud service. Nobody else,
-including this project, can see anything.
+(Mirra was called *Samantha Screen Mirror* before version 0.6.)
 
-## Get started
+## Which file do I download?
 
-You need: a Windows 10/11 PC, an Android phone (Android 11 or newer), and a free Tailscale account.
-(iPhone? See [iPhone](#iphone).)
+Go to the [latest release](../../releases/latest) and download only what you need:
 
-**On the PC**
+| You have | Download | What it is |
+|---|---|---|
+| A Windows PC | **`Mirra-for-Windows-Setup.exe`** | The installer. Double-click it, click *Next*, done. |
+| An Android phone | **`Mirra-for-Android-Setup.apk`** | Easiest: don't download it yourself. Scan the QR code in Mirra on your PC and it comes from your PC. |
+| A Windows PC, no installer wanted | `Mirra-for-Windows.zip` | The same program as a folder. Unzip it somewhere permanent and open `Mirra.exe`. |
+| *(nothing to do)* | `SamanthaScreenMirror-windows.zip`, `*.sha256` | Used by older versions to update themselves. You don't need these. |
 
-1. Download `SamanthaScreenMirror-windows.zip` from the [Releases](../../releases/latest) page and unzip it somewhere
-   permanent (for example `C:\Apps`).
-2. Double-click **`Samantha.exe`**. (Windows may warn about an unrecognised app because the program is not
-   code-signed: choose *More info > Run anyway*.)
-3. The window checks **Tailscale** (it offers to install it; open it and sign in) and then **Start Samantha**.
-   From now on Samantha starts by itself when you log in to Windows, and the Samantha shortcut opens the window.
+An iPhone? There is no iPhone app, but an iPhone can watch the PC in Safari (see [iPhone](#iphone)).
 
-**On the phone**
+Windows may say *"Windows protected your PC"* the first time, because the program is not code-signed (that costs
+money): click *More info*, then *Run anyway*.
 
-1. Install the free **Tailscale** app from the Play Store, sign in with the **same account** as the PC and switch it on.
-2. On the PC, Samantha's **Home** page shows a QR code: scan it with the phone's camera. It downloads
-   **Samantha Setup** (`SamanthaSetup.apk`). Open the downloaded file to install it (Android asks once to allow
-   installs from your browser), open Samantha Setup and tap **Install Samantha** (Android asks once to allow Setup to
-   install apps). Afterwards you can remove Setup.
-3. Open Samantha on the phone. On the PC click **Show a code**. Type the **PC address** and the **code** from the PC
-   into the phone and tap **Connect**. That's it: the phone remembers the PC.
+## Set it up (5 minutes, once)
 
-> **Why a setup app?** Android 13 and newer block the Accessibility switch ("Restricted setting") for an app installed
-> straight from a downloaded file, and many phones hide the option that unblocks it. An app installed by Samantha
-> Setup is not blocked.
+**1. On the PC**
+1. Run **`Mirra-for-Windows-Setup.exe`**. Mirra opens when it is done.
+2. Mirra checks **Tailscale** (it offers to install it: open it and sign in, it's free), then click **Start Mirra**.
+   From now on Mirra starts by itself with Windows.
 
-**To see the PC on the phone:** tap **Show my PC**.
+**2. On the phone**
+1. Install **Tailscale** from the Play Store, sign in with the **same account** as the PC, and switch it on.
+2. Point the phone's **camera** at the QR code on Mirra's **Home** page on the PC and tap the link.
+3. Tap **Open Mirra and connect**. The first time, this downloads **Mirra Setup** from your PC: open the download,
+   install it, open **Mirra Setup** and tap **Install Mirra**. Then go back to the page and tap the button again.
+   Mirra opens and connects by itself.
 
-**To see and use the phone on the PC** (once): in the phone app, under *Let this PC see and use my phone*, tap
-**Turn it on**, choose Samantha in the list and switch it on. Then open **My phone** in the window on the PC.
+No camera? Open Mirra on the phone and type the PC's name and the code shown on the PC.
 
-> **"Restricted setting"?** Samantha was installed straight from the downloaded file instead of with Samantha
-> Setup. In the Samantha app tap **Get Samantha Setup**, install and open it, tap **Remove the old Samantha** and then
-> **Install Samantha**, and pair with your PC again. (On some phones *App info > three dots > Allow restricted
-> settings* also works, but many phones do not show it.)
+**3. To see the phone on the PC** (once): in Mirra on the phone, under *This phone on your PC*, tap **Turn it on**,
+choose **Mirra** in Android's list and switch it on. Then click **Open phone window** in Mirra on the PC.
+
+> **Why "Mirra Setup"?** Android 13 and newer block that switch ("Restricted setting") for apps installed straight
+> from a downloaded file, and many phones hide the option that unblocks it. Mirra Setup installs Mirra the way app
+> stores do, so the switch simply works.
 
 ## Using it
 
-**The phone app.** *Show my PC* opens the PC full screen. Tap to show or hide the bars, pinch to zoom, drag to look
-around, double-tap to zoom in or back out. **Rotate** switches between sideways (the default, a PC screen is wide) and
-upright. **More** has the quality presets, the screen picker (for several monitors), the mouse pointer switch and
-**Save a screenshot of the PC** (full resolution, into *Pictures/Samantha*). The phone stays awake while you watch.
+**On the phone** tap **Show my PC**: full screen, sideways (tap **Rotate** for upright), pinch to zoom, double-tap
+to zoom in or out, tap once for the bars. **More** has quality presets, the screen picker and **Save a screenshot**.
+Switch on **Play the PC's sound** to hear the PC.
 
-| Preset | Size | fps | Roughly (constant motion) |
-|---|---|---|---|
-| Data saver | 960x540 | 15 | 0.5 MB/s |
-| Balanced (default) | 1440x810 | 30 | 3 MB/s |
-| Sharp | 1920x1080 | 30 | 5 MB/s |
-| Smooth | 1440x810 | 60 | 6 MB/s |
+**On the PC**, the **phone window** shows your phone at its own shape, at up to 60 pictures a second:
 
-A still screen costs almost nothing, because pictures are only sent when something changes. *Smooth* sends twice the
-data, so use it on Wi-Fi. Presets apply to everyone watching that PC.
+| Do this | To |
+|---|---|
+| Click | Tap |
+| Hold and drag | Swipe, scroll, draw: the mouse is a finger |
+| Mouse wheel | Scroll |
+| Right click, or Esc | Back |
+| Middle click | Home |
+| Type | Type on the phone (tap a text field first) |
+| Ctrl + V | Paste the PC's clipboard on the phone |
 
-**Sound.** Switch on **Play the PC's sound** in the phone app (or **Sound** in the viewer). It is off until you do,
-and it is per phone. The phone plays whatever the PC plays (the PC's speakers keep playing too). It needs about
-1.5 Mbit/s (*Use less data* makes it mono: a quarter of that) and runs a fraction of a second behind the picture.
-The PC records nothing while no phone listens. To forbid sound completely, switch it off under **Settings** in the
-window on the PC.
+The toolbar beside it has Back, Home, Recent apps, Notifications, volume, lock, **save a screenshot on the PC**
+(into *Pictures\Mirra*) and picture quality (720p / 1080p / Full, 30 / 60 fps, Standard / High / Maximum).
 
-**The window on the PC.**
-- **Home**: whether Samantha is on (**Turn off** keeps it off, also after a restart, until **Turn on**), the PC's
-  address and a pairing code, and **Update now** when there is a new version.
-- **My phone**: your phone, live (about 3 pictures a second: Android allows no more for this). Click to tap, hold
-  for a long press, drag to swipe, scroll with the wheel. Click the phone, then type on your keyboard; Esc is Back.
-  **View only** stops the mouse and keyboard from doing anything. The phone only sends its screen while this page is
-  open, and shows a notification while it does.
-- **Settings**: sound, **Sign out all phones** (they need a new code), the browser link for an iPhone, and updates.
+The first time each session the phone asks Android to record its screen, and Mirra answers *Start now* for you, so
+nobody has to tap it. While the PC looks, the phone shows a notification. If recording is not possible, Mirra falls
+back to a few screenshots a second.
 
-Closing the window does not stop Samantha; it keeps running in the background so your phone can always reach the PC.
+**The Mirra window on the PC**: **Home** shows whether Mirra is on (the switch turns it off and keeps it off), the
+QR code to connect a phone and your phone's status. **My phone** opens the phone window and sets its quality.
+**Settings**: sound, updates, *Sign out all phones*, the iPhone link, the log folder.
 
-**On the phone, you stay in control.** *Allow tapping, swiping and typing* (on by default) and **Pause** are in the
-app, and turning off the Accessibility switch in Android stops it completely.
+Closing the window does not stop Mirra; it keeps running in the background so your phone can always reach the PC.
+
+**On the phone, you stay in control**: *Let the PC tap and type*, *Smooth video* and **Pause** are switches in the
+app, and turning off the Accessibility switch in Android stops it completely. Banking apps and password screens show
+black on the PC (Android blocks them).
 
 ## Updates
 
 Both apps update themselves:
 
-- **PC**: when a new version is out, the window shows **Update available**. Click **Update now**: it downloads the new
-  version from this project's Releases page, checks its SHA-256 checksum, swaps it in (your settings are kept; a failed
-  swap puts the old version back), restarts Samantha and reopens the window. It checks GitHub every 12 hours.
-- **Phone**: after the PC has updated, the phone app shows **Update available**. Tap **Update**: it downloads the
-  matching app from your own PC and Android asks you to confirm. (The first time, Android asks to allow Samantha to
-  install updates.)
+- **PC**: when a new version is out, Mirra shows a pop-up: **Update now** or **Later**. It downloads the new version
+  from this project's releases page, checks its SHA-256 checksum, swaps it in (your settings are kept; a failed swap
+  puts the old version back), and opens again. It checks every few hours (Settings > Updates).
+- **Phone**: after the PC has updated, the phone app shows a pop-up too and downloads the matching version from your
+  own PC. Android asks you to confirm.
 
-**Coming from 0.4.x?** Run the update once as before (`samantha-mirror update`, or double-click `samantha-mirror.exe`
-and say yes). Your shortcuts and taskbar pin then open the new window. If you had installed the earlier companion app
-*Samantha Phone*, it updates to the new Samantha app from the PC; if Android says the update conflicts with the
-installed app, uninstall the old one and install the new one from the QR code on the PC.
+**Coming from Samantha Screen Mirror 0.5 or older?** Click *Update now* there (or run `samantha-mirror update`). It
+becomes Mirra, and your shortcuts become *Mirra* shortcuts. On the phone, install Mirra with **Mirra Setup** (it
+replaces the old app; connect again afterwards).
 
 ## iPhone
 
-There is no iPhone app (Apple does not allow one to be installed from outside the App Store), and an iPhone cannot be
-shown on the PC. An iPhone can still **watch the PC** in Safari: in the window on the PC go to **Settings > iPhone or a
+There is no iPhone app (Apple does not allow installing one from outside the App Store), and an iPhone cannot be
+shown on the PC. An iPhone can still **watch the PC** in Safari: in Mirra on the PC go to **Settings > iPhone or a
 web browser > Show the link**, and scan it with the iPhone's camera (Tailscale must be on in the iPhone). Then
-*Share > Add to Home Screen*. The same works in any browser in your tailnet.
+*Share > Add to Home Screen*.
 
 ## How it works
 
 ```
-Android: Samantha app ----Tailscale (WireGuard)----> PC: Samantha (background service + window)
+Android: Mirra ----Tailscale (WireGuard, encrypted)----> PC: Mirra (background service + window)
   Show my PC   <---- picture (JPEG stream), sound (PCM) ----   screen capture (DXGI), speaker loopback
-  phone screen ----- screenshots (Accessibility) --------->   "My phone" in the window
-  taps, typing <---- commands -----------------------------   mouse and keyboard in the window
+  this screen  ----- H.264 video (or screenshots) -------->   the phone window (decoded with OpenCV)
+  touches      <---- touch, key and text events ----------   mouse and keyboard in the phone window
 ```
 
 - The PC listens **only** on its Tailscale address (`100.x.y.z`) and refuses to start otherwise. Every request needs
-  the secret token, which the phone gets once by sending the pairing code.
+  the secret token, which a phone gets once by sending the pairing code shown on the PC.
 - The phone app always connects **out** to the PC. It never accepts connections, so nothing can reach into the phone.
 - Capture runs only while someone is watching, in both directions.
 
@@ -147,92 +134,73 @@ See [SECURITY.md](SECURITY.md) for the full threat model.
 
 ## Troubleshooting
 
-The window's Home page says what is wrong. For a full check, run `samantha-mirror doctor` (see *Command line* below).
-
 - **The phone says "Can't reach your PC"**: Tailscale is off on the phone, or the PC is asleep or not signed in to
   Windows. Set Windows to never sleep while plugged in (Settings > System > Power).
-- **"This PC no longer accepts this phone"**: someone used *Sign out all phones* (or the token changed). In the phone
-  app tap *Forget this PC* and pair again with a new code.
-- **"That code is wrong or has run out"**: click **New code** on the PC and type it within 10 minutes.
-- **"PC screen can't be captured right now"**: the PC is locked or showing a secure prompt (UAC). It recovers when you
-  unlock it.
-- **"My phone" says no phone is connected**: in the phone app, *Let this PC see and use my phone* should say
-  *Connected*. If it says *Off*, switch on Accessibility (see *Get started*). If *Pause* is on, switch it off.
-- **No sound on the phone**: switch it on in the phone app, check the phone's volume, and check that sound is allowed
-  in the window's Settings.
-- **I want it off for now**: **Turn off** on the window's Home page. It stays off until you **Turn on** again.
-- **Choppy on mobile data**: choose the *Data saver* preset (viewer > More).
+- **The QR code's page does not open**: Tailscale must be on in the phone (the page comes from your PC).
+- **"This PC no longer accepts this phone"**: someone used *Sign out all phones*. In the phone app tap *Forget this
+  PC*, then scan the QR code again.
+- **"Restricted setting" on the phone**: Mirra was installed from the downloaded file directly. In the app tap **Get
+  Mirra Setup** and let it install Mirra again.
+- **The phone window says "Waiting for your phone"**: in Mirra on the phone, *This phone on your PC* must be on and
+  not paused. The first picture can take a second or two.
+- **"PC screen can't be captured right now"**: the PC is locked or showing a secure prompt. It recovers when unlocked.
+- **No sound on the phone**: switch it on in the phone app and check that sound is allowed in Settings on the PC.
 - **Nothing connects at all**: a Windows Firewall rule may be needed. In an Administrator PowerShell:
   ```powershell
-  New-NetFirewallRule -DisplayName "Samantha Screen Mirror (Tailscale only)" -Direction Inbound `
-    -Protocol TCP -LocalPort 8787 -RemoteAddress 100.64.0.0/10 -Action Allow
+  New-NetFirewallRule -DisplayName "Mirra (Tailscale only)" -Direction Inbound -Protocol TCP `
+    -LocalPort 8787,8788 -RemoteAddress 100.64.0.0/10 -Action Allow
   ```
+
+For a full check, run `samantha-mirror doctor` in PowerShell in Mirra's folder.
 
 ## Command line
 
-Everything is in the window, but the command line is there for scripts and troubleshooting. In PowerShell, in the
-program's folder: `.\samantha-mirror.exe <command>` (from source: `.\.venv\Scripts\samantha-mirror <command>`).
-
-| Command | What it does |
-|---|---|
-| `app` | Open the Samantha window |
-| `doctor` | Check everything and say how to fix problems |
-| `setup` | Guided first-time setup in the console |
-| `link` | Show the browser link and QR code (for an iPhone) |
-| `run` | Run the server in this console (Ctrl+C stops it) |
-| `stop` / `start` | Turn Samantha off (stays off after a restart) / on again |
-| `autostart install/remove/status` | Start hidden at every Windows logon |
-| `update` | Check for and install a new version (`--check` only looks, `-y` skips the question) |
-| `uninstall` | Remove autostart and the HTTPS setup (keeps your settings) |
+Everything is in the window, but the command line (`samantha-mirror.exe` in Mirra's folder) is there for scripts:
+`doctor` (check everything), `update` (`--check`, `-y`), `stop` / `start`, `link` (iPhone link and QR code),
+`setup` (console setup), `uninstall` (remove start-at-logon), `app` (open the window), `run` (run the server here).
 
 ## Settings file
 
-`%APPDATA%\SamanthaScreenMirror\.env` (or the project folder when you run from a checkout; set `SM_HOME` to use
-another folder). The window manages it; you rarely need to touch it.
+`%APPDATA%\SamanthaScreenMirror\.env` (the folder kept its old name so updates keep your settings). The window manages
+it; you rarely need to touch it.
 
 | Variable | Default | Meaning |
 |---|---|---|
-| `SM_TOKEN` | generated | Access secret, min 16 chars. **Keep private.** *Sign out all phones* replaces it. |
-| `SM_PORT` | 8787 | Port on the Tailscale address (the phone app assumes 8787 unless you type another) |
-| `SM_MONITOR` | 1 | Monitor to start with (0 = all combined) |
-| `SM_FPS` | 30 | Max frames per second (1-60) |
-| `SM_JPEG_QUALITY` | 70 | 10-95 |
-| `SM_SCALE` | 0.75 | 0.1-1.0 size of the stream |
+| `SM_TOKEN` | generated | Access secret. **Keep private.** *Sign out all phones* replaces it. |
+| `SM_PORT` | 8787 | Port on the Tailscale address (the live phone link uses the next port, 8788) |
+| `SM_MONITOR` / `SM_FPS` / `SM_JPEG_QUALITY` / `SM_SCALE` | 1 / 30 / 70 / 0.75 | The PC picture's defaults |
 | `SM_MAX_CLIENTS` | 3 | Max simultaneous viewers |
-| `SM_CURSOR` | 1 | Draw the mouse pointer on the stream |
+| `SM_CURSOR` | 1 | Draw the mouse pointer on the PC picture |
 | `SM_CAPTURE` | auto | `auto` (DXGI, falls back to mss), `dxgi`, or `mss` |
-| `SM_UPDATE_CHECK` | 1 | Look for new releases on GitHub every 12 hours (only contacts api.github.com) |
-| `SM_AUDIO` | 1 | Let phones hear this PC's sound (each phone must also switch it on). `0` forbids it |
-| `SM_LOOPBACK` | 0 | Also listen on 127.0.0.1 (set by `setup` when you enable HTTPS for the iPhone page) |
+| `SM_UPDATE_CHECK` | 1 | Look for new versions on GitHub (only contacts api.github.com) |
+| `SM_AUDIO` | 1 | Let phones hear this PC's sound (each phone must also switch it on) |
+| `SM_LOOPBACK` | 0 | Also listen on 127.0.0.1 |
 
 ## Limitations
 
-- Windows only on the PC side (capture and autostart are Windows-specific). Android only on the phone side.
-- The PC is view-only from the phone **by design** (no remote control of the PC, now or later).
-- The phone on the PC is a few pictures a second (Android's limit for this permission): fine for using apps and
-  reading, not for watching videos. Banking apps and password prompts show black (Android blocks them). A swipe is
-  sent when you let go of the mouse. Typing works in normal text fields. The phone's sound does not come to the PC.
-- Sound is raw uncompressed audio (no codec), so it needs Wi-Fi-like bandwidth.
-- The PC picture is a JPEG stream, not video: documents and desktops are very light, full-screen video over a slow
-  connection looks choppy. H.264 was left out on purpose: the good software encoder (x264) is GPL, which would change
-  this project's MIT license for the download.
+- Windows on the PC, Android 11 or newer on the phone (iPhones: watching the PC in Safari only).
+- The PC is view-only from the phone **by design**: no remote control of the PC, now or later.
+- Banking apps and password screens show black on the PC (Android blocks them). Typing works in normal text fields.
+  The phone's sound does not come to the PC.
+- The PC picture on the phone is a JPEG stream: documents and desktops are very light, full-screen video over a slow
+  connection looks choppy. Sound is uncompressed, so it needs Wi-Fi-like speed.
 
 ## Development
 
 See [CONTRIBUTING.md](CONTRIBUTING.md). Quick version: `pip install -e ".[dev]"`, then `ruff check .` and `pytest`.
-CI builds the Windows download and the Android app when a version tag (e.g. `v0.5.0`) is pushed.
 
 ```
-samantha_mirror/
-  desktop.py    the Samantha window (Tkinter)     server.py   Flask routes (the API both apps use)
-  capture.py    screen -> JPEG                    audio.py    speaker loopback -> PCM
-  phonelink.py  phone <-> PC relay                pairing.py  6-digit pairing codes
-  runner.py     background service                updater.py  check/install releases
-  cli.py        command line                      doctor.py, wizard.py, tailscale.py, autostart.py, ...
-  web/          built browser page for iPhones (source in web/)
-android/        the Android app (plain Java, built by android/build.py without Gradle)
-packaging/      PyInstaller spec for the Windows download
-tests/          pytest (tests/test_android.py also runs the app's networking code on the PC)
+samantha_mirror/   the PC side (Python; the package kept its old name)
+  desktop.py       the Mirra window (CustomTkinter)     phonewindow.py  the phone window (H.264 via OpenCV)
+  server.py        the web API both apps use            streamrelay.py  the live phone link (port + 1)
+  capture.py       PC screen -> JPEG                    audio.py        speaker loopback -> PCM
+  phonelink.py     phone commands relay                 pairing.py, joinpage.py  pairing by QR code
+  runner.py        background service                   updater.py      updates
+android/           Mirra for Android (plain Java, built by android/build.py without Gradle)
+android/setup/     Mirra Setup (installs the app so Android does not restrict it)
+packaging/         PyInstaller spec, the installer (mirra.iss), the logo, build-release.ps1
+web/               the browser page for iPhones (React)
+tests/             pytest (tests/test_android.py also runs the app's networking code on the PC)
 ```
 
 ## License

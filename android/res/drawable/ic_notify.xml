@@ -1,9 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- written by packaging/make_logo.py -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
-    android:width="24dp"
-    android:height="24dp"
-    android:viewportWidth="24"
-    android:viewportHeight="24">
-    <path android:fillColor="#FFFFFFFF"
-        android:pathData="M8,2h8a2,2 0,0 1,2 2v16a2,2 0,0 1,-2 2h-8a2,2 0,0 1,-2 -2v-16a2,2 0,0 1,2 -2zM8,6v10h8v-10z" />
+    android:width="24dp" android:height="24dp"
+    android:viewportWidth="24" android:viewportHeight="24">
+    <path android:pathData="M13.71,13.99 H4.03 A1.17,1.17 0 0 1 2.85,12.82 V5.16 A1.17,1.17 0 0 1 4.03,3.99 H17.82 A1.17,1.17 0 0 1 18.99,5.16 V7.13" android:strokeColor="#FFFFFFFF" android:strokeWidth="1.71" android:strokeLineCap="butt" android:strokeLineJoin="round" />
+    <path android:pathData="M16.43,9.06 H20.35 A0.79,0.79 0 0 1 21.15,9.85 V19.22 A0.79,0.79 0 0 1 20.35,20.01 H16.43 A0.79,0.79 0 0 1 15.64,19.22 V9.85 A0.79,0.79 0 0 1 16.43,9.06 Z" android:strokeColor="#FFFFFFFF" android:strokeWidth="1.71" android:strokeLineCap="butt" android:strokeLineJoin="round" />
+    <path android:pathData="M9.09,14.72 H12.76 V17.25 H9.09 Z" android:fillColor="#FFFFFFFF" />
+    <path android:pathData="M7.19,17.13 H13.71 V18.65 H7.19 A0.76,0.76 0 0 1 6.43,17.89 V17.89 A0.76,0.76 0 0 1 7.19,17.13 Z" android:fillColor="#FFFFFFFF" />
+    <path android:pathData="M17.79,17.95 H18.99 A0.35,0.35 0 0 1 19.34,18.30 V18.30 A0.35,0.35 0 0 1 18.99,18.65 H17.79 A0.35,0.35 0 0 1 17.44,18.30 V18.30 A0.35,0.35 0 0 1 17.79,17.95 Z" android:fillColor="#FFFFFFFF" />
 </vector>

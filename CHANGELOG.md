@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.6.0: Mirra
+
+Samantha Screen Mirror is now **Mirra**, with a new logo, a new look and much more.
+
+New
+- **The phone on the PC like the real thing**: its own phone-shaped window, **smooth video** (the phone's hardware
+  H.264 encoder, up to 60 pictures a second, sharp up to the phone's full resolution) instead of 2 to 3 screenshots a
+  second. The mouse is a **live finger** (drag, scroll, draw), right click is Back, middle click Home, Ctrl+V pastes,
+  and a toolbar has Back, Home, Recent apps, Notifications, volume, lock, screenshot and picture quality. Android's
+  "Start recording?" question is answered by the app itself, so nobody taps it; without recording, it falls back to
+  screenshots. The video goes over a new live link on the next port (8788), with the same token and protection.
+- **Connect a phone with one scan**: the QR code on the PC opens a page from your own PC that opens Mirra and
+  connects it, or downloads Mirra Setup from the PC first. No typing, no GitHub.
+- **Update pop-ups** in both apps when a new version is out (Update now / Later).
+- **A Windows installer**, `Mirra-for-Windows-Setup.exe`: double-click, Next, done (per user, no admin rights).
+- **New design** for both apps: the Mirra window (CustomTkinter: sidebar, cards, switches, segmented choices, Windows
+  icons) and the Android app (gradient hero card, setting rows with icons, adaptive icon with Android 13 themed icon).
+- Clear download names: `Mirra-for-Windows-Setup.exe`, `Mirra-for-Windows.zip`, `Mirra-for-Android-Setup.apk`.
+
+Changes
+- The window program is `Mirra.exe`; older shortcuts are pointed at it and renamed *Mirra*. Settings stay where they
+  were. Older versions update through `SamanthaScreenMirror-windows.zip`, still published for them.
+
 ## 0.5.2
 
 Fixes

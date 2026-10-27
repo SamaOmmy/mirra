@@ -63,11 +63,38 @@ def test_pictures_are_read_from_the_stream_one_by_one():
 
 
 def test_old_shortcuts_are_pointed_at_the_window():
-    window = Path(r"C:\Apps\SamanthaScreenMirror\Samantha.exe")
+    window = Path(r"C:\Apps\Mirra\Mirra.exe")
     script = shortcuts.script(window, [Path(r"C:\Users\me\Desktop")], create=True)
-    assert r"'C:\Apps\SamanthaScreenMirror\samantha-mirror.exe'" in script        # only links to our old program
-    assert "-not $link.Arguments" in script                                           # not ones that run a command
-    assert r"Samantha.lnk" in script
+    assert r"'C:\Apps\Mirra\samantha-mirror.exe'" in script     # only links to our older programs
+    assert r"'C:\Apps\Mirra\Samantha.exe'" in script
+    assert "-not $link.Arguments" in script                       # not ones that run a command
+    assert "Mirra.lnk" in script
+
+
+def test_the_join_page_opens_the_app_or_downloads_setup():
+    from samantha_mirror import joinpage
+    html = joinpage.page("MY-PC", "100.64.0.9", 8787, "123456")
+    assert "intent://pair?host=100.64.0.9&amp;port=8787&amp;code=123456#Intent;scheme=mirra;package=app.samantha.phone" in html
+    assert "S.browser_fallback_url=http%3A%2F%2F100.64.0.9%3A8787%2Fdownload%2Fsetup" in html
+    assert "MY-PC" in html
+    assert "intent://" not in joinpage.page("PC", "h", 1, "12345x")       # only six digits make a link
+    assert "&lt;script&gt;" in joinpage.page("<script>", "h", 1, None)    # the PC name is escaped
+
+
+def test_the_decoder_starts_from_a_key_frame_repeated():
+    from samantha_mirror.phonewindow import PRIME, _Decoder
+    d = _Decoder.__new__(_Decoder)   # without the sockets and OpenCV
+    pushed = []
+    d.push = pushed.append
+    d.config, d.started = b"", False
+    d.packet(0, b"P")                 # nothing before the codec config and a key frame
+    d.packet(2, b"SPS")
+    d.packet(0, b"P")
+    assert pushed == []
+    d.packet(1, b"IDR")
+    assert pushed == [b"SPS" + b"IDR" * PRIME]
+    d.packet(0, b"P2")
+    assert pushed[-1] == b"P2"
 
 
 def test_shortcuts_are_left_alone_when_running_from_source():

@@ -35,6 +35,14 @@ Live reload against a running server: `$env:SM_TARGET="http://<tailscale-ip>:878
   and the Android SDK). `tests/test_android.py` builds it and runs its networking code against a real server on the
   PC's JVM; it is skipped when the tools are missing.
 
+## Releases
+
+Bump the version in `pyproject.toml` and `samantha_mirror/__init__.py`, update `CHANGELOG.md`, then push a tag
+`vX.Y.Z`. The Release workflow builds and publishes everything when the repository has the Android signing secrets
+(`ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`). Without them it publishes nothing, because an app signed
+with another key cannot update the phones; build the files by hand instead with
+`.\packaging\build-release.ps1 -Keystore <key> -PasswordFile <file>` and upload the three files in `release\`.
+
 ## Guidelines
 
 - Security first: do not weaken the Tailscale-only binding or token checks. Add a test for any change to auth,

@@ -17,3 +17,6 @@ phone.json
 android/*.keystore
 samantha_mirror/phone_app/*.apk
 *.idsig
+
+# hand-built release files (packaging/build-release.ps1)
+release/

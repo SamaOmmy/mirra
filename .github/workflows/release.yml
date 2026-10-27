@@ -1,6 +1,11 @@
 name: Release
 
 # Push a tag like v0.3.0 to build the Windows download and attach it to a GitHub release.
+#
+# The Android app must be signed with the same key every time, or phones cannot update it in place. That key comes
+# from the ANDROID_KEYSTORE_BASE64 and ANDROID_KEYSTORE_PASSWORD secrets. Without them a tag build publishes nothing
+# (a release can then be built and uploaded by hand with the key, see CONTRIBUTING.md); a manual run still builds a
+# test zip signed with a throwaway key.
 on:
   push:
     tags: ["v*"]
@@ -13,19 +18,38 @@ jobs:
   windows-exe:
     runs-on: windows-latest
     steps:
+      - name: Signing key for the Android app
+        id: key
+        shell: pwsh
+        env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          if ($env:KEYSTORE_B64) { "build=true" >> $env:GITHUB_OUTPUT; exit 0 }
+          if ("${{ github.ref_type }}" -eq "tag") {
+            "build=false" >> $env:GITHUB_OUTPUT
+            Write-Output "::notice::No ANDROID_KEYSTORE_BASE64 secret, so this release is not built here: an app signed with a throwaway key could never update phones in place. Add the secrets, or build and upload the release by hand with the key."
+          } else {
+            "build=true" >> $env:GITHUB_OUTPUT
+            Write-Output "::warning::No ANDROID_KEYSTORE_BASE64 secret: this test build signs the Android app with a throwaway key."
+          }
       - uses: actions/checkout@v4
+        if: steps.key.outputs.build == 'true'
       - uses: actions/setup-python@v5
+        if: steps.key.outputs.build == 'true'
         with:
           python-version: "3.12"
       - run: python -m pip install -e . pyinstaller
+        if: steps.key.outputs.build == 'true'
       - name: Tag matches the version in the code
-        if: startsWith(github.ref, 'refs/tags/')
+        if: steps.key.outputs.build == 'true' && startsWith(github.ref, 'refs/tags/')
         run: python -c "import samantha_mirror, sys; sys.exit(0 if 'v' + samantha_mirror.__version__ == '${{ github.ref_name }}' else 'tag ${{ github.ref_name }} != version ' + samantha_mirror.__version__)"
       - uses: actions/setup-java@v4
+        if: steps.key.outputs.build == 'true'
         with:
           distribution: temurin
           java-version: "17"
       - name: Build the Android app (it ships inside the zip)
+        if: steps.key.outputs.build == 'true'
         shell: pwsh
         env:
           KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
@@ -34,12 +58,12 @@ jobs:
           if ($env:KEYSTORE_B64) {
             [IO.File]::WriteAllBytes("$env:RUNNER_TEMP/release.keystore", [Convert]::FromBase64String($env:KEYSTORE_B64))
             $env:SM_KEYSTORE = "$env:RUNNER_TEMP/release.keystore"
-          } else {
-            Write-Warning "No ANDROID_KEYSTORE_BASE64 secret: signing with a throwaway key (phones cannot update the app in place)."
           }
           python android/build.py
       - run: pyinstaller packaging/samantha.spec --noconfirm --distpath dist --workpath build
+        if: steps.key.outputs.build == 'true'
       - name: Package
+        if: steps.key.outputs.build == 'true'
         shell: pwsh
         run: |
           Copy-Item packaging/README-FIRST.txt dist/SamanthaScreenMirror/
@@ -50,6 +74,7 @@ jobs:
           $hash = (Get-FileHash SamanthaScreenMirror-windows.zip -Algorithm SHA256).Hash.ToLower()
           "$hash  SamanthaScreenMirror-windows.zip" | Set-Content -Encoding ascii SamanthaScreenMirror-windows.zip.sha256
       - uses: actions/upload-artifact@v4
+        if: steps.key.outputs.build == 'true'
         with:
           name: SamanthaScreenMirror-windows
           path: |
@@ -57,7 +82,7 @@ jobs:
             SamanthaScreenMirror-windows.zip.sha256
             SamanthaPhone.apk
       - uses: softprops/action-gh-release@v2
-        if: startsWith(github.ref, 'refs/tags/')
+        if: steps.key.outputs.build == 'true' && startsWith(github.ref, 'refs/tags/')
         with:
           files: |
             SamanthaScreenMirror-windows.zip

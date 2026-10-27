@@ -1,6 +1,11 @@
-"""Build the Samantha Phone app (SamanthaPhone.apk) with the plain Android SDK tools: no Gradle, no libraries.
+"""Build the Android apps with the plain Android SDK tools: no Gradle, no libraries.
 
-    python android/build.py            builds samantha_mirror/phone_app/SamanthaPhone.apk
+    python android/build.py            builds samantha_mirror/phone_app/SamanthaPhone.apk (the Samantha app)
+                                       and SamanthaSetup.apk next to it
+
+Samantha Setup (android/setup/) carries a copy of the Samantha app and installs it through Android's installer
+session. Android 13+ blocks the Accessibility switch ("Restricted setting") for apps installed from a downloaded
+file, but not for apps installed that way, so people install Samantha with Setup.
 
 Needs: a JDK (javac, keytool) and the Android SDK with build-tools and a platform (android.jar, API 34 or newer).
 They are found through JAVA_HOME / ANDROID_HOME / ANDROID_SDK_ROOT, or a standard install location.
@@ -21,6 +26,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent
 OUT = Path(os.environ.get("SM_APK_OUT") or ROOT / "samantha_mirror" / "phone_app" / "SamanthaPhone.apk")
+SETUP_OUT = OUT.with_name("SamanthaSetup.apk")
 MIN_SDK, TARGET_SDK = 30, 34   # 30: the first Android with accessibility screenshots
 
 
@@ -96,6 +102,48 @@ def signing() -> tuple[Path, str, str]:
     return path, "samantha-dev", "samantha"
 
 
+def build_apk(build_tools: Path, android_jar: Path, name: str, app: Path, out: Path,
+              extra_res: list[Path] = (), assets: Path | None = None) -> None:
+    """One APK from app/AndroidManifest.xml, app/res, app/src (and optional extra resource files and assets)."""
+    with tempfile.TemporaryDirectory(prefix="samantha-apk-") as tmp:
+        tmp = Path(tmp)
+        compiled, gen, classes, dex = tmp / "res.zip", tmp / "gen", tmp / "classes", tmp / "dex"
+        for d in (gen, classes, dex):
+            d.mkdir()
+
+        run(tool(build_tools, "aapt2"), "compile", "--dir", app / "res", "-o", compiled)
+        flats = []
+        for i, res in enumerate(extra_res):
+            flat_dir = tmp / f"extra{i}"
+            flat_dir.mkdir()
+            run(tool(build_tools, "aapt2"), "compile", res, "-o", flat_dir)
+            flats += list(flat_dir.iterdir())
+        base = tmp / "base.apk"
+        run(tool(build_tools, "aapt2"), "link", "-o", base, "-I", android_jar, "--manifest", app / "AndroidManifest.xml",
+            "--min-sdk-version", MIN_SDK, "--target-sdk-version", TARGET_SDK, "--version-code", version_code(name),
+            "--version-name", name, "--java", gen, *(["-A", assets] if assets else []), compiled, *flats)
+
+        sources = [str(p) for p in list((app / "src").rglob("*.java")) + list(gen.rglob("*.java"))]
+        run(find_jdk_tool("javac"), "--release", "17", "-encoding", "UTF-8", "-Xlint:-options", "-classpath", android_jar, "-d", classes, *sources)
+        class_files = [str(p) for p in classes.rglob("*.class")]
+        run(tool(build_tools, "d8"), "--release", "--min-api", MIN_SDK, "--lib", android_jar, "--output", dex, *class_files)
+
+        unsigned = tmp / "unsigned.apk"
+        with zipfile.ZipFile(base) as src, zipfile.ZipFile(unsigned, "w", zipfile.ZIP_DEFLATED) as apk:
+            for item in src.infolist():
+                apk.writestr(item, src.read(item.filename))
+            apk.write(dex / "classes.dex", "classes.dex")
+
+        aligned = tmp / "aligned.apk"
+        run(tool(build_tools, "zipalign"), "-f", "-p", 4, unsigned, aligned)
+        keystore, password, alias = signing()
+        out.parent.mkdir(parents=True, exist_ok=True)
+        run(tool(build_tools, "apksigner"), "sign", "--v4-signing-enabled", "false", "--ks", keystore, "--ks-pass", f"pass:{password}", "--ks-key-alias", alias,
+            "--out", out, aligned)
+        run(tool(build_tools, "apksigner"), "verify", out)
+    print(f"Built {out} ({out.stat().st_size // 1024} KB)")
+
+
 def main():
     sdk = find_sdk()
     build_tools = sorted((sdk / "build-tools").iterdir(), key=lambda p: [int(x) if x.isdigit() else 0 for x in re.split(r"\D+", p.name)])[-1]
@@ -105,39 +153,13 @@ def main():
         fail("No Android platform (android.jar) installed in the SDK.")
     android_jar = platform / "android.jar"
     name = version()
-    print(f"Samantha Phone {name}: build-tools {build_tools.name}, {platform.name}")
+    print(f"Samantha for Android {name}: build-tools {build_tools.name}, {platform.name}")
 
-    with tempfile.TemporaryDirectory(prefix="samantha-apk-") as tmp:
-        tmp = Path(tmp)
-        compiled, gen, classes, dex = tmp / "res.zip", tmp / "gen", tmp / "classes", tmp / "dex"
-        for d in (gen, classes, dex):
-            d.mkdir()
-
-        run(tool(build_tools, "aapt2"), "compile", "--dir", HERE / "res", "-o", compiled)
-        base = tmp / "base.apk"
-        run(tool(build_tools, "aapt2"), "link", "-o", base, "-I", android_jar, "--manifest", HERE / "AndroidManifest.xml",
-            "--min-sdk-version", MIN_SDK, "--target-sdk-version", TARGET_SDK, "--version-code", version_code(name),
-            "--version-name", name, "--java", gen, compiled)
-
-        sources = [str(p) for p in list((HERE / "src").rglob("*.java")) + list(gen.rglob("*.java"))]
-        run(find_jdk_tool("javac"), "--release", "17", "-encoding", "UTF-8", "-Xlint:-options", "-classpath", android_jar, "-d", classes, *sources)
-        class_files = [str(p) for p in classes.rglob("*.class")]
-        run(tool(build_tools, "d8"), "--release", "--min-api", MIN_SDK, "--lib", android_jar, "--output", dex, *class_files)
-
-        unsigned = tmp / "unsigned.apk"
-        with zipfile.ZipFile(base) as src, zipfile.ZipFile(unsigned, "w", zipfile.ZIP_DEFLATED) as out:
-            for item in src.infolist():
-                out.writestr(item, src.read(item.filename))
-            out.write(dex / "classes.dex", "classes.dex")
-
-        aligned = tmp / "aligned.apk"
-        run(tool(build_tools, "zipalign"), "-f", "-p", 4, unsigned, aligned)
-        keystore, password, alias = signing()
-        OUT.parent.mkdir(parents=True, exist_ok=True)
-        run(tool(build_tools, "apksigner"), "sign", "--v4-signing-enabled", "false", "--ks", keystore, "--ks-pass", f"pass:{password}", "--ks-key-alias", alias,
-            "--out", OUT, aligned)
-        run(tool(build_tools, "apksigner"), "verify", OUT)
-    print(f"Built {OUT} ({OUT.stat().st_size // 1024} KB)")
+    build_apk(build_tools, android_jar, name, HERE, OUT)
+    with tempfile.TemporaryDirectory(prefix="samantha-setup-assets-") as assets:
+        shutil.copy(OUT, Path(assets) / "Samantha.apk")   # Setup installs this copy
+        build_apk(build_tools, android_jar, name, HERE / "setup", SETUP_OUT,
+                  extra_res=[HERE / "res" / "drawable" / "icon.xml"], assets=Path(assets))
 
 
 if __name__ == "__main__":

@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.5.2
+
+Fixes
+- **"Restricted setting" on Android 13 and newer.** Android blocks the Accessibility switch for an app installed from a
+  downloaded file, and many phones hide the "Allow restricted settings" option that should unblock it. The new
+  **Samantha Setup** app installs Samantha through Android's installer, which Android does not restrict, so the switch
+  simply works. The QR code in the Samantha window now downloads Setup. A copy of Samantha that was installed from a
+  file says so and offers Setup; Setup removes that copy and installs it again (pair with the PC again afterwards).
+
 ## 0.5.1
 
 Fixes

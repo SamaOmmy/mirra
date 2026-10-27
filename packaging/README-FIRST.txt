@@ -8,8 +8,9 @@ Your PC on your phone, and your Android phone on your PC. Privately, over Tailsc
    (it then starts by itself whenever you log in to Windows).
 
 2. On your Android phone: install the free Tailscale app, sign in with the SAME
-   account as this PC and switch it on. Then scan the QR code on Samantha's Home page
-   to get the Samantha app, and type the PC address and code shown there.
+   account as this PC and switch it on. Then scan the QR code on Samantha's Home page:
+   it downloads Samantha Setup. Install and open it, tap Install Samantha, then open
+   Samantha and type the PC address and code shown on the PC.
 
 3. In the phone app, "Show my PC" shows this PC. Under "My phone" in the Samantha
    window on the PC you see your phone and use it with the mouse and keyboard.

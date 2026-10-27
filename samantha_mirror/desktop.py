@@ -27,7 +27,9 @@ from . import APP_NAME, __version__, autostart, config, gestures, proc, shortcut
 from .client import Local, Offline, Refused, jpeg_frames
 
 TITLE = "Samantha"
-APK_URL = f"https://github.com/{updater.REPO}/releases/latest/download/SamanthaPhone.apk"
+# Samantha Setup installs the app so that Android 13+ does not block its Accessibility switch ("Restricted
+# setting"), which it does for an app installed straight from a downloaded file.
+APK_URL = f"https://github.com/{updater.REPO}/releases/latest/download/SamanthaSetup.apk"
 PROJECT_URL = f"https://github.com/{updater.REPO}"
 LOCK_NAME = r"Local\SamanthaScreenMirrorWindow"
 ICON = Path(__file__).resolve().parent / "app.ico"
@@ -502,7 +504,7 @@ class HomePage(Page):
         self.apk_qr = qr_image(APK_URL, Ui.px(150))
         tk.Label(left, image=self.apk_qr, bg=CARD).pack(anchor="w")
         label(left, "1. Get the app", 10, bold=True).pack(anchor="w", pady=(Ui.px(8), 0))
-        label(left, "Scan with your Android phone's camera,\ndownload it and open the file to install.", 9, MUTED).pack(anchor="w")
+        label(left, "Scan with your Android phone's camera and\ninstall Samantha Setup. Open it and tap\nInstall Samantha.", 9, MUTED).pack(anchor="w")
         link = label(left, "Or copy the download link", 9, ACCENT, cursor="hand2")
         link.pack(anchor="w")
         link.bind("<Button-1>", lambda e: self.copy(APK_URL, "Download link copied."))

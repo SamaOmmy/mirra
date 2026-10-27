@@ -48,20 +48,26 @@ You need: a Windows 10/11 PC, an Android phone (Android 11 or newer), and a free
 **On the phone**
 
 1. Install the free **Tailscale** app from the Play Store, sign in with the **same account** as the PC and switch it on.
-2. On the PC, Samantha's **Home** page shows a QR code: scan it with the phone's camera to download **Samantha for
-   Android**, then open the file to install it (Android asks once to allow installs from your browser).
+2. On the PC, Samantha's **Home** page shows a QR code: scan it with the phone's camera. It downloads
+   **Samantha Setup** (`SamanthaSetup.apk`). Open the downloaded file to install it (Android asks once to allow
+   installs from your browser), open Samantha Setup and tap **Install Samantha** (Android asks once to allow Setup to
+   install apps). Afterwards you can remove Setup.
 3. Open Samantha on the phone. On the PC click **Show a code**. Type the **PC address** and the **code** from the PC
    into the phone and tap **Connect**. That's it: the phone remembers the PC.
+
+> **Why a setup app?** Android 13 and newer block the Accessibility switch ("Restricted setting") for an app installed
+> straight from a downloaded file, and many phones hide the option that unblocks it. An app installed by Samantha
+> Setup is not blocked.
 
 **To see the PC on the phone:** tap **Show my PC**.
 
 **To see and use the phone on the PC** (once): in the phone app, under *Let this PC see and use my phone*, tap
 **Turn it on**, choose Samantha in the list and switch it on. Then open **My phone** in the window on the PC.
 
-> **"Restricted setting"?** Android 13 and newer block that switch for apps installed outside the Play Store. Tap the
-> switch once so Android blocks it, then in the Samantha app tap **Open App info**, tap the **three dots** at the top
-> right and choose **Allow restricted settings**, and switch it on again. The three dots only appear *after* Android
-> has blocked the switch once.
+> **"Restricted setting"?** Samantha was installed straight from the downloaded file instead of with Samantha
+> Setup. In the Samantha app tap **Get Samantha Setup**, install and open it, tap **Remove the old Samantha** and then
+> **Install Samantha**, and pair with your PC again. (On some phones *App info > three dots > Allow restricted
+> settings* also works, but many phones do not show it.)
 
 ## Using it
 

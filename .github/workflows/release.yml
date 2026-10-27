@@ -69,6 +69,7 @@ jobs:
           Copy-Item packaging/README-FIRST.txt dist/SamanthaScreenMirror/
           # the Android app is also its own download: the QR code in the Samantha window points at it
           Copy-Item samantha_mirror/phone_app/SamanthaPhone.apk SamanthaPhone.apk
+          Copy-Item samantha_mirror/phone_app/SamanthaSetup.apk SamanthaSetup.apk
           Compress-Archive -Path dist/SamanthaScreenMirror -DestinationPath SamanthaScreenMirror-windows.zip
           # `samantha-mirror update` verifies this before installing the download
           $hash = (Get-FileHash SamanthaScreenMirror-windows.zip -Algorithm SHA256).Hash.ToLower()
@@ -81,6 +82,7 @@ jobs:
             SamanthaScreenMirror-windows.zip
             SamanthaScreenMirror-windows.zip.sha256
             SamanthaPhone.apk
+            SamanthaSetup.apk
       - uses: softprops/action-gh-release@v2
         if: steps.key.outputs.build == 'true' && startsWith(github.ref, 'refs/tags/')
         with:
@@ -88,4 +90,5 @@ jobs:
             SamanthaScreenMirror-windows.zip
             SamanthaScreenMirror-windows.zip.sha256
             SamanthaPhone.apk
+            SamanthaSetup.apk
           generate_release_notes: true

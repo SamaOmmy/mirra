@@ -3,7 +3,7 @@
 
       .\packaging\build-release.ps1 -Keystore C:\path\release.keystore -PasswordFile C:\path\password.txt
 
-  Writes release\SamanthaScreenMirror-windows.zip, its .sha256 and SamanthaPhone.apk. Upload those three to the
+  Writes release\SamanthaScreenMirror-windows.zip, its .sha256, SamanthaPhone.apk and SamanthaSetup.apk. Upload them to the
   GitHub release (for example: gh release create v0.5.0 release\* --notes-file notes.md).
   Needs the project's .venv with PyInstaller, a JDK 17+ and the Android SDK. The key never leaves this PC.
 #>
@@ -37,6 +37,7 @@ if (Test-Path $out) { Remove-Item -Recurse -Force $out }
 New-Item -ItemType Directory $out | Out-Null
 Copy-Item packaging/README-FIRST.txt "$work\dist\SamanthaScreenMirror\"
 Copy-Item samantha_mirror/phone_app/SamanthaPhone.apk "$out\SamanthaPhone.apk"
+Copy-Item samantha_mirror/phone_app/SamanthaSetup.apk "$out\SamanthaSetup.apk"
 Compress-Archive -Path "$work\dist\SamanthaScreenMirror" -DestinationPath "$out\SamanthaScreenMirror-windows.zip"
 $hash = (Get-FileHash "$out\SamanthaScreenMirror-windows.zip" -Algorithm SHA256).Hash.ToLower()
 "$hash  SamanthaScreenMirror-windows.zip" | Set-Content -Encoding ascii "$out\SamanthaScreenMirror-windows.zip.sha256"

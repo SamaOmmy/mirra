@@ -39,7 +39,9 @@ public class MainActivity extends Activity {
 
     // paired screen
     private TextView pcName, pcStatus, phoneStatus, updateText;
-    private LinearLayout accessOff, updateCard;
+    private LinearLayout accessOff, restrictedBox, updateCard;
+    static final String SETUP_URL =
+            "https://github.com/SamaOmmy/samantha-screen-mirror/releases/latest/download/SamanthaSetup.apk";
     private Switch soundSwitch, lowDataSwitch, controlSwitch, pauseSwitch;
     private volatile String online;       // null while unknown, "" when the PC answers, else the problem
     private volatile String pcVersion = "";
@@ -212,13 +214,18 @@ public class MainActivity extends Activity {
             startActivity(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS));
         }));
         accessOff.addView(Ui.text(this, "\nIn the list, choose Samantha and switch it on. You do this once; Android "
-                + "never asks again.\n\nIf Android says the setting is restricted (it does that for apps installed "
-                + "from outside the Play Store): first try the switch once so Android blocks it, then open App info "
-                + "below, tap the three dots at the top right, choose \"Allow restricted settings\", and switch it on "
-                + "again. The three dots only appear after Android has blocked the switch once.", 13, Ui.MUTED, false));
-        accessOff.addView(Ui.gap(this, 10));
-        accessOff.addView(Ui.button(this, "Open App info", false, v -> startActivity(
-                new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:" + getPackageName())))));
+                + "never asks again.", 13, Ui.MUTED, false));
+        // Android 13+ blocks the switch ("Restricted setting") for an app installed from a downloaded file, and many
+        // phones hide the way to allow it. Samantha Setup installs the app so that Android does not block it.
+        restrictedBox = new LinearLayout(this);
+        restrictedBox.setOrientation(LinearLayout.VERTICAL);
+        restrictedBox.addView(Ui.text(this, "\nDoes Android say \"Restricted setting\"? It blocks this switch because "
+                + "this copy of Samantha was installed from a downloaded file. Fix it once with Samantha Setup: download "
+                + "it, open it, and let it install Samantha again (it removes this copy first, so pair with your PC "
+                + "again afterwards). Then the switch works.", 13, Ui.WARN, false));
+        restrictedBox.addView(Ui.gap(this, 10));
+        restrictedBox.addView(Ui.button(this, "Get Samantha Setup", false, v -> open(SETUP_URL)));
+        accessOff.addView(restrictedBox);
         phone.addView(accessOff);
         controlSwitch = Ui.toggle(this, "Allow tapping, swiping and typing", prefs.control(), (b, on) -> {
             prefs.setControl(on);
@@ -263,6 +270,20 @@ public class MainActivity extends Activity {
         }
     };
 
+    /**
+     * Whether Android may have marked this app "restricted" (Android 13+, installed from a downloaded file). An app
+     * cannot read that mark, so this goes by who installed it: Samantha Setup and the Play Store never cause it.
+     */
+    private boolean restricted() {
+        if (Build.VERSION.SDK_INT < 33) return false;
+        try {
+            String by = getPackageManager().getInstallSourceInfo(getPackageName()).getInitiatingPackageName();
+            return !"app.samantha.setup".equals(by) && !"com.android.vending".equals(by);
+        } catch (Exception e) {
+            return true;
+        }
+    }
+
     private boolean accessibilityOn() {
         if (PhoneService.instance != null) return true;
         String enabled = Settings.Secure.getString(getContentResolver(), Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES);
@@ -285,6 +306,7 @@ public class MainActivity extends Activity {
         }
         boolean on = accessibilityOn();
         accessOff.setVisibility(on ? View.GONE : View.VISIBLE);
+        restrictedBox.setVisibility(restricted() ? View.VISIBLE : View.GONE);
         controlSwitch.setVisibility(on ? View.VISIBLE : View.GONE);
         pauseSwitch.setVisibility(on ? View.VISIBLE : View.GONE);
         if (!on) {

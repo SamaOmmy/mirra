@@ -5,6 +5,7 @@ the code shown on the PC for the token). Everything else (/stream, /api/*) needs
 """
 import io
 import socket
+import time
 from pathlib import Path
 
 import mss
@@ -69,6 +70,7 @@ def create_app(cfg: Config, sound: AudioSource | None = None, phone: PhoneHub | 
     app.config["MAX_CONTENT_LENGTH"] = MAX_FRAME + 4096
     phone = phone or PhoneHub()
     pairing = pairing or Pairing()
+    app_seen = [0.0]   # when the phone app last made a request (monotonic)
     auth = auth or Auth(cfg.token)
     sound = sound or AudioSource(enabled=cfg.audio)
     source = FrameSource(cfg.monitor, cfg.fps, cfg.jpeg_quality, cfg.scale, cfg.cursor, cfg.capture)
@@ -100,6 +102,8 @@ def create_app(cfg: Config, sound: AudioSource | None = None, phone: PhoneHub | 
         if not ok:
             auth.record_failure(ip)
             abort(401)
+        if request.user_agent.string.startswith("Dalvik"):   # the Android app (its HTTP client says so)
+            app_seen[0] = time.monotonic()
 
     @app.after_request
     def security_headers(resp):
@@ -287,7 +291,9 @@ def create_app(cfg: Config, sound: AudioSource | None = None, phone: PhoneHub | 
     # -- Android phone: phone app <-> relay <-> the Samantha window on this PC -----------------------
     @app.get("/api/phone/state")
     def phone_state():
-        return jsonify(phone.state() | {"app_available": PHONE_APP.exists()})
+        # app_seen: seconds since the phone app last talked to this PC (paired and open), for the Mirra window's guide
+        seen = round(time.monotonic() - app_seen[0]) if app_seen[0] else None
+        return jsonify(phone.state() | {"app_available": PHONE_APP.exists(), "app_seen": seen})
 
     # -- the QR code in the Mirra window: connect a phone with one scan --------------------------------
     @app.get("/join")

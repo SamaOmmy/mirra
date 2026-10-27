@@ -68,6 +68,18 @@ def wheel(x: float, y: float, notches: float) -> dict:
             "ms": WHEEL_MS}
 
 
+def scroll(x: float, y: float, notches: float) -> dict:
+    """The wheel on the live phone window: the phone drags by this much and holds still before letting go, so the
+    page moves exactly that far instead of flinging on."""
+    return {"t": "scroll", "x": round(_clamp(x), 4), "y": round(_clamp(y), 4),
+            "dy": round(max(-0.8, min(0.8, notches * 0.12)), 4)}
+
+
+def pinch(x: float, y: float, zoom_in: bool) -> dict:
+    """Ctrl + wheel: two fingers moving apart (zoom in) or together (zoom out) around (x, y)."""
+    return {"t": "pinch", "x": round(_clamp(x), 4), "y": round(_clamp(y), 4), "in": bool(zoom_in)}
+
+
 KEYS = {"Escape": ("key", "back")}
 CHARACTERS = {"BackSpace": "\b", "Return": "\n", "KP_Enter": "\n", "Tab": "\t"}
 

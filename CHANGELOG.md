@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.6.2
+
+New
+- **Step-by-step guides that tick themselves off.** On the PC, Home walks through connecting a phone in four steps
+  (Tailscale, scan the code, switch on, open the phone window); the right side shows only what to do now, and moves on
+  by itself when Mirra sees a step done. On the phone, Mirra checks that Tailscale is installed and switched on and
+  says exactly what is missing; turning on phone control has numbered steps; when the PC can't be reached it says why
+  and offers to open Tailscale. Mirra Setup shows its two steps the same way. Settings on the PC has a short Help.
+- **More responsive phone window**: a dot shows your touch at once, the mouse wheel scrolls exactly (no runaway
+  fling), Ctrl + wheel pinches to zoom, typing goes out faster, steadier frame pacing (fine Windows timers), sharper
+  default picture (10 Mbit/s), and a simpler toolbar (Back, Home, Recent apps, volume, screenshot, and More).
+- The Mirra window only redraws what changed (no flicker, less CPU).
+
 ## 0.6.1
 
 Fixes

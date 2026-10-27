@@ -131,10 +131,20 @@ public class SetupActivity extends Activity {
         String by = installedBy();
         LinearLayout c = card();
         if (by.isEmpty()) {
-            c.addView(text("Install Mirra", 19, TEXT, true));
-            c.addView(text("Android asks once to allow Mirra Setup to install apps: switch that on, come back here "
-                    + "and tap Install again.", 14, MUTED, false));
-            c.addView(button("Install Mirra", true, v -> install()));
+            boolean allowed = getPackageManager().canRequestPackageInstalls();
+            c.addView(text((allowed ? "\u2713  " : "1.  ") + "Allow Mirra Setup to install apps", 17, allowed ? OK : TEXT, true));
+            if (!allowed) {
+                c.addView(text("Tap Allow, switch on \"Allow from this source\", then come back here.", 14, MUTED, false));
+                c.addView(button("Allow", true, v -> startActivity(new Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
+                        Uri.parse("package:" + getPackageName())))));
+            }
+            TextView two = text("2.  Install Mirra", 17, allowed ? TEXT : MUTED, true);
+            two.setPadding(0, dp(18), 0, dp(4));
+            c.addView(two);
+            if (allowed) {
+                c.addView(text("Tap Install Mirra, then Install.", 14, MUTED, false));
+                c.addView(button("Install Mirra", true, v -> install()));
+            }
         } else if (by.equals(getPackageName()) || by.equals("com.android.vending")) {
             c.addView(text("Mirra is installed", 19, OK, true));
             c.addView(text("You can open it now. This setup app is no longer needed, so you can remove it.", 14, MUTED, false));

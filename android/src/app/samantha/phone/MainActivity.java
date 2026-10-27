@@ -47,6 +47,8 @@ public class MainActivity extends Activity {
     private TextView pcName, phoneStatus;
     private LinearLayout pcChipHolder, accessOff, accessOn, restrictedBox;
     private Switch lowDataSwitch;
+    private TextView tsStatus, pcHelp;
+    private Button tsButton, openTailscale;
     private View lowDataRow;
     private volatile String online;       // null while unknown, "" when the PC answers, else the problem
     private volatile String pcVersion = "";
@@ -153,43 +155,117 @@ public class MainActivity extends Activity {
     }
 
     // -- not paired yet -----------------------------------------------------------------------------
+    // -- not paired yet: two steps, each checked by the app itself ---------------------------------------
+    private static final String TAILSCALE = "com.tailscale.ipn";
+
     private void buildPairing() {
         LinearLayout hero = Ui.hero(this);
         hero.addView(Ui.text(this, "Connect to your PC", 22, 0xffffffff, true));
-        hero.addView(Ui.text(this, "On your PC, open Mirra. Point this phone's camera at the QR code on its Home page "
-                + "and tap the link: Mirra connects by itself.", 15, 0xe6ffffff, false));
+        hero.addView(Ui.text(this, "Two steps. Mirra ticks them off as you go.", 15, 0xe6ffffff, false));
         root.addView(hero);
 
-        LinearLayout card = Ui.card(this);
-        card.addView(Ui.title(this, "Or type it in"));
-        card.addView(Ui.text(this, "Mirra on the PC shows its name and a 6-digit code.", 14, Ui.MUTED, false));
-        card.addView(caption("PC name or address"));
-        addressField = field("For example  my-pc  or  100.101.102.103", InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_URI);
+        LinearLayout one = Ui.card(this);
+        one.addView(stepTitle("1", "Tailscale on this phone"));
+        tsStatus = Ui.text(this, "", 14, Ui.MUTED, false);
+        tsStatus.setPadding(0, Ui.dp(this, 6), 0, 0);
+        one.addView(tsStatus);
+        tsButton = Ui.button(this, "", true, v -> tailscaleAction());
+        one.addView(tsButton);
+        root.addView(one);
+
+        LinearLayout two = Ui.card(this);
+        two.addView(stepTitle("2", "Scan the code on your PC"));
+        two.addView(Ui.text(this, "1.  On your PC, open Mirra. Its Home page shows a QR code.\n"
+                + "2.  Point this phone's camera at it and tap the link.\n"
+                + "3.  Tap \"Open Mirra and connect\". Done.", 14, Ui.TEXT, false));
+        LinearLayout typed = new LinearLayout(this);
+        typed.setOrientation(LinearLayout.VERTICAL);
+        typed.setVisibility(View.GONE);
+        Button showTyped = Ui.button(this, "No camera? Type it in", false, v -> {
+            typed.setVisibility(View.VISIBLE);
+            v.setVisibility(View.GONE);
+        });
+        two.addView(showTyped);
+        typed.addView(caption("PC name (or address)"));
+        addressField = field("As shown on the PC, e.g.  my-pc", InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_URI);
         String old = prefs.server();
         if (!old.isEmpty()) addressField.setText(Net.host(old));
-        card.addView(addressField);
-        card.addView(caption("Code"));
+        typed.addView(addressField);
+        typed.addView(caption("Code"));
         codeField = field("6 digits", InputType.TYPE_CLASS_NUMBER);
         codeField.setImeOptions(EditorInfo.IME_ACTION_GO);
         codeField.setOnEditorActionListener((v, action, event) -> {
             pairFromFields();
             return true;
         });
-        card.addView(codeField);
+        typed.addView(codeField);
         connect = Ui.button(this, "Connect", true, v -> pairFromFields());
-        card.addView(connect);
+        typed.addView(connect);
+        two.addView(typed);
         pairMessage = Ui.text(this, "", 14, Ui.WARN, false);
         pairMessage.setPadding(0, Ui.dp(this, 10), 0, 0);
-        card.addView(pairMessage);
-        root.addView(card);
+        two.addView(pairMessage);
+        root.addView(two);
+    }
 
-        LinearLayout help = Ui.card(this);
-        help.addView(Ui.settingRow(this, R.drawable.ic_monitor, "Tailscale on this phone",
-                "Mirra reaches your PC through Tailscale, a free private network. Install it, sign in with the same "
-                        + "account as on the PC, and switch it on.", null));
-        help.addView(Ui.button(this, "Get Tailscale", false,
-                v -> open("https://play.google.com/store/apps/details?id=com.tailscale.ipn")));
-        root.addView(help);
+    private LinearLayout stepTitle(String number, String title) {
+        LinearLayout row = Ui.row(this);
+        TextView badge = Ui.text(this, number, 15, 0xffffffff, true);
+        badge.setGravity(android.view.Gravity.CENTER);
+        badge.setBackground(Ui.gradient(this, Ui.ACCENT, Ui.ACCENT2, 15));
+        row.addView(badge, new LinearLayout.LayoutParams(Ui.dp(this, 30), Ui.dp(this, 30)));
+        TextView t = Ui.title(this, title);
+        t.setPadding(Ui.dp(this, 12), 0, 0, 0);
+        row.addView(t, Ui.weight(1));
+        return row;
+    }
+
+    private boolean tailscaleInstalled() {
+        try {
+            getPackageManager().getPackageInfo(TAILSCALE, 0);
+            return true;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    /** Tailscale (or another VPN) is switched on. */
+    private boolean vpnOn() {
+        try {
+            android.net.ConnectivityManager cm = getSystemService(android.net.ConnectivityManager.class);
+            android.net.NetworkCapabilities caps = cm.getNetworkCapabilities(cm.getActiveNetwork());
+            return caps != null && caps.hasTransport(android.net.NetworkCapabilities.TRANSPORT_VPN);
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    private void tailscaleAction() {
+        if (!tailscaleInstalled()) {
+            open("https://play.google.com/store/apps/details?id=" + TAILSCALE);
+        } else {
+            Intent i = getPackageManager().getLaunchIntentForPackage(TAILSCALE);
+            if (i != null) startActivity(i);
+        }
+    }
+
+    private void refreshTailscale() {
+        if (tsStatus == null) return;
+        if (!tailscaleInstalled()) {
+            tsStatus.setText("Not installed yet. It is free: install it, then sign in with the same account as on your PC.");
+            tsStatus.setTextColor(Ui.WARN);
+            tsButton.setText("Get Tailscale");
+            tsButton.setVisibility(View.VISIBLE);
+        } else if (!vpnOn()) {
+            tsStatus.setText("Installed, but switched off. Open it, sign in with the same account as on your PC, and switch it on.");
+            tsStatus.setTextColor(Ui.WARN);
+            tsButton.setText("Open Tailscale");
+            tsButton.setVisibility(View.VISIBLE);
+        } else {
+            tsStatus.setText("\u2713  Tailscale is on.");
+            tsStatus.setTextColor(Ui.OK);
+            tsButton.setVisibility(View.GONE);
+        }
     }
 
     private void pairFromFields() {
@@ -244,6 +320,13 @@ public class MainActivity extends Activity {
         pcChipHolder = new LinearLayout(this);
         pcChipHolder.setPadding(0, Ui.dp(this, 10), 0, 0);
         hero.addView(pcChipHolder);
+        pcHelp = Ui.text(this, "", 14, 0xffffffff, false);
+        pcHelp.setPadding(0, Ui.dp(this, 8), 0, 0);
+        pcHelp.setVisibility(View.GONE);
+        hero.addView(pcHelp);
+        openTailscale = Ui.button(this, "Open Tailscale", false, v -> tailscaleAction());
+        openTailscale.setVisibility(View.GONE);
+        hero.addView(openTailscale);
         Button show = Ui.button(this, "Show my PC", false, v -> startActivity(new Intent(this, ViewerActivity.class)));
         show.setBackground(Ui.ripple(Ui.round(this, 0xffffffff, 16, 0), Ui.round(this, 0xffffffff, 16, 0)));
         show.setTextColor(0xff1d1650);
@@ -278,7 +361,9 @@ public class MainActivity extends Activity {
         accessOff = new LinearLayout(this);
         accessOff.setOrientation(LinearLayout.VERTICAL);
         accessOff.addView(Ui.text(this, "Let Mirra on your PC show this phone and use it with the mouse and keyboard. "
-                + "Switch it on once in Android's Accessibility settings: choose Mirra and turn it on.", 14, Ui.MUTED, false));
+                + "You do this once:", 14, Ui.MUTED, false));
+        accessOff.addView(Ui.text(this, "1.  Tap Turn it on below.\n2.  In the list, tap Mirra.\n"
+                + "3.  Switch on \"Use Mirra\".\n4.  Tap Allow.", 15, Ui.TEXT, false));
         accessOff.addView(Ui.button(this, "Turn it on", true, v -> {
             if (Build.VERSION.SDK_INT >= 33) requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS}, 1);
             startActivity(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS));
@@ -358,6 +443,7 @@ public class MainActivity extends Activity {
     }
 
     private void refresh() {
+        refreshTailscale();
         if (!prefs.paired() || pcName == null) return;
         String o = online;
         pcName.setText(prefs.pcLabel());
@@ -367,6 +453,12 @@ public class MainActivity extends Activity {
         else {
             pcChipHolder.addView(Ui.chip(this, "Can't reach it", 0xfffcd34d));
         }
+        boolean unreachable = o != null && !o.isEmpty();
+        boolean vpn = vpnOn();
+        pcHelp.setVisibility(unreachable ? View.VISIBLE : View.GONE);
+        pcHelp.setText(!vpn ? "Tailscale is off on this phone. Switch it on." :
+                "Check that the PC is on and awake, and that Mirra is on there (Home page on the PC).");
+        openTailscale.setVisibility(unreachable && !vpn ? View.VISIBLE : View.GONE);
         boolean on = accessibilityOn();
         accessOff.setVisibility(on ? View.GONE : View.VISIBLE);
         accessOn.setVisibility(on ? View.VISIBLE : View.GONE);

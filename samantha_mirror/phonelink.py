@@ -12,7 +12,7 @@ MAX_FRAME = 3_000_000       # bytes in one phone screenshot (JPEG)
 POLL_SECONDS = 25           # how long the phone's command request may wait
 GONE_AFTER = POLL_SECONDS + 10   # the phone counts as disconnected after this much silence
 MAX_QUEUE = 200
-KEYS = {"back", "home", "recents", "notifications", "quicksettings", "wake"}
+KEYS = {"back", "home", "recents", "notifications", "quicksettings", "wake", "lock", "power", "volup", "voldown"}
 MAX_TEXT = 500
 MAX_POINTS = 200
 MAX_GESTURE_MS = 10_000
@@ -48,6 +48,17 @@ def parse_input(data) -> dict:
                 raise BadInput("each point is [x, y]")
             clean.append([_unit(point[0]), _unit(point[1])])
         return {"t": "gesture", "pts": clean, "ms": int(ms)}
+    if kind == "touch":
+        if data.get("a") not in ("down", "move", "up"):
+            raise BadInput("a touch is down, move or up")
+        return {"t": "touch", "a": data["a"], "x": _unit(data.get("x")), "y": _unit(data.get("y"))}
+    if kind == "scroll":
+        dy = data.get("dy")
+        if isinstance(dy, bool) or not isinstance(dy, (int, float)) or not -1 <= dy <= 1:
+            raise BadInput("dy must be -1 to 1")
+        return {"t": "scroll", "x": _unit(data.get("x")), "y": _unit(data.get("y")), "dy": float(dy)}
+    if kind == "pinch":
+        return {"t": "pinch", "x": _unit(data.get("x")), "y": _unit(data.get("y")), "in": data.get("in") is True}
     if kind == "key":
         if data.get("k") not in KEYS:
             raise BadInput(f"key must be one of {', '.join(sorted(KEYS))}")

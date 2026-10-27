@@ -29,7 +29,7 @@ from .streamrelay import frame, read_frame, read_line  # noqa: E402
 QUALITY = {   # name: (long side in pixels, 0 = the phone's own; bits per second)
     "720p": 1280, "1080p": 1920, "Full": 0,
 }
-BITRATES = {"Standard": 4_000_000, "High": 8_000_000, "Maximum": 16_000_000}
+BITRATES = {"Standard": 5_000_000, "High": 10_000_000, "Maximum": 20_000_000}
 DEFAULTS = {"size": "1080p", "fps": 60, "bitrate": "High"}
 
 
@@ -50,7 +50,7 @@ def save_prefs(prefs: dict) -> None:
 
 def quality_message(prefs: dict) -> dict:
     return {"t": "quality", "max_size": QUALITY.get(prefs["size"], 1920), "fps": int(prefs["fps"]),
-            "bitrate": BITRATES.get(prefs["bitrate"], 8_000_000)}
+            "bitrate": BITRATES.get(prefs["bitrate"], 10_000_000)}
 
 
 PRIME = 60   # OpenCV's FFmpeg reads about 50 pictures before it starts: give it the first one that often
@@ -294,12 +294,12 @@ class PhoneWindow:
         self.canvas = tk.Canvas(win, bg="#000000", highlightthickness=0, cursor="hand2", takefocus=1)
         self.canvas.pack(side="left", fill="both", expand=True)
         glyphs = _icon_font(root)
-        buttons = [("", "Back", lambda: self.key("back")), ("", "Home", lambda: self.key("home")),
-                   ("", "Recent apps", lambda: self.key("recents")),
-                   ("", "Notifications", lambda: self.key("notifications")),
-                   ("", "Volume up", lambda: self.key("volup")), ("", "Volume down", lambda: self.key("voldown")),
-                   ("", "Lock the phone", lambda: self.key("lock")), ("", "Save a screenshot on this PC", self.screenshot),
-                   ("", "Picture quality", self.quality_menu)]
+        buttons = [("\uE72B", "Back  (right click, Esc)", lambda: self.key("back")),
+                   ("\uE80F", "Home  (middle click)", lambda: self.key("home")),
+                   ("\uE7C4", "Recent apps", lambda: self.key("recents")),
+                   ("\uE995", "Volume up", lambda: self.key("volup")), ("\uE993", "Volume down", lambda: self.key("voldown")),
+                   ("\uE722", "Save a screenshot on this PC", self.screenshot),
+                   ("\uE712", "More", self.more_menu)]
         self.tips = tk.Label(win, bg="#1c2030", fg="#f1f3f8", font=("Segoe UI", 9), padx=8, pady=3)
         for glyph, tip, action in buttons:
             b = tk.Label(bar, text=glyph if glyphs else tip[0], font=(glyphs, 15) if glyphs else ("Segoe UI", 12, "bold"),
@@ -311,12 +311,19 @@ class PhoneWindow:
         self.fps_label = tk.Label(bar, text="", fg="#8e96a8", bg="#0b0d12", font=("Segoe UI", 8))
         self.fps_label.pack(side="bottom", pady=8)
 
+        try:   # Windows timers tick every 15 ms by default: too coarse for 60 pictures a second
+            import ctypes
+            ctypes.windll.winmm.timeBeginPeriod(1)
+            self._fine_timer = True
+        except Exception:
+            self._fine_timer = False
         self.photo = None
         self.shown = -1
         self.rect = (0, 0, 0, 0)
         self.pointer_down = False
         self.last_move = 0.0
         self.typed = ""
+        self._wheel_notches = 0.0
         c = self.canvas
         c.bind("<ButtonPress-1>", self._down)
         c.bind("<B1-Motion>", self._move)
@@ -381,7 +388,7 @@ class PhoneWindow:
         fps = link.fps()
         mode = "video" if link.info.get("codec") == "h264" else ("photos" if link.info else "")
         self.fps_label.config(text=f"{fps:.0f} fps\n{mode}" if fps else mode)
-        self.win.after(6, self._tick)
+        self.win.after(4, self._tick)
 
     def _render(self, force=False):
         link = self.link
@@ -400,7 +407,7 @@ class PhoneWindow:
         ph, pw = picture.shape[:2]
         scale = min(cw / pw, ch / ph)
         w, h = max(1, int(pw * scale)), max(1, int(ph * scale))
-        small = cv2.resize(picture, (w, h), interpolation=cv2.INTER_AREA if scale < 1 else cv2.INTER_LINEAR)
+        small = cv2.resize(picture, (w, h), interpolation=cv2.INTER_LINEAR)
         rgb = cv2.cvtColor(small, cv2.COLOR_BGR2RGB)
         image = self.Image.frombuffer("RGB", (w, h), rgb.tobytes(), "raw", "RGB", 0, 1)
         x0, y0 = (cw - w) // 2, (ch - h) // 2
@@ -412,6 +419,7 @@ class PhoneWindow:
             c.create_image(x0, y0, image=self.photo, anchor="nw", tags="picture")
         if self.rect[:2] != (x0, y0):
             c.coords("picture", x0, y0)
+        c.tag_raise("finger")
         self.rect = (x0, y0, w, h)
 
     # -- input -----------------------------------------------------------------------------------
@@ -421,24 +429,34 @@ class PhoneWindow:
             return None
         return min(1.0, max(0.0, (event.x - x0) / w)), min(1.0, max(0.0, (event.y - y0) / h))
 
-    def _touch(self, action, pos):
+    def _touch(self, action, pos, event=None):
         self.link.send(b"I", {"t": "touch", "a": action, "x": round(pos[0], 4), "y": round(pos[1], 4)})
+        c = self.canvas
+        if action == "up" or event is None:
+            c.after(120, lambda: c.delete("finger"))
+            return
+        r = 13   # shows the touch at once, before the phone's picture catches up
+        if c.find_withtag("finger"):
+            c.coords("finger", event.x - r, event.y - r, event.x + r, event.y + r)
+        else:
+            c.create_oval(event.x - r, event.y - r, event.x + r, event.y + r, outline="#ffffff", width=2,
+                          fill="#7c5cff", stipple="gray50", tags="finger")
 
     def _down(self, event):
         self.canvas.focus_set()
         pos = self._where(event)
         if pos:
             self.pointer_down = True
-            self._touch("down", pos)
+            self._touch("down", pos, event)
 
     def _move(self, event):
         now = time.monotonic()
-        if not self.pointer_down or now - self.last_move < 0.008:
+        if not self.pointer_down or now - self.last_move < 0.004:
             return
         pos = self._where(event)
         if pos:
             self.last_move = now
-            self._touch("move", pos)
+            self._touch("move", pos, event)
 
     def _up(self, event):
         pos = self._where(event)
@@ -448,8 +466,20 @@ class PhoneWindow:
 
     def _wheel(self, event):
         pos = self._where(event)
-        if pos:
-            self.link.send(b"I", gestures.wheel(pos[0], pos[1], event.delta / 120))
+        if not pos:
+            return
+        if event.state & 0x4:   # Ctrl + wheel: pinch to zoom
+            self.link.send(b"I", gestures.pinch(pos[0], pos[1], event.delta > 0))
+            return
+        # notches that arrive together become one smooth drag
+        if not self._wheel_notches:
+            self.win.after(30, lambda p=pos: self._wheel_flush(p))
+        self._wheel_notches += event.delta / 120
+
+    def _wheel_flush(self, pos):
+        notches, self._wheel_notches = self._wheel_notches, 0.0
+        if notches:
+            self.link.send(b"I", gestures.scroll(pos[0], pos[1], notches))
 
     def key(self, name: str):
         self.link.send(b"I", {"t": "key", "k": name})
@@ -466,7 +496,7 @@ class PhoneWindow:
             self.key(value)
             return
         if not self.typed:
-            self.win.after(60, self._flush_text)
+            self.win.after(25, self._flush_text)
         self.typed += value
 
     def _flush_text(self):
@@ -496,6 +526,19 @@ class PhoneWindow:
         self.tips.place(relx=0.5, rely=0.96, anchor="s")
         self.win.after(2500, self.tips.place_forget)
 
+    def more_menu(self):
+        import tkinter as tk
+        menu = tk.Menu(self.win, tearoff=0, bg="#141721", fg="#f1f3f8", activebackground="#7c5cff",
+                       activeforeground="#ffffff", bd=0)
+        for text, name in (("Notifications", "notifications"), ("Quick settings", "quicksettings"),
+                           ("Lock the phone", "lock"), ("Power menu", "power"), ("Wake the screen", "wake")):
+            menu.add_command(label=text, command=lambda n=name: self.key(n))
+        menu.add_separator()
+        menu.add_command(label="Paste this PC's clipboard  (Ctrl+V)", command=self._paste)
+        menu.add_command(label="Picture quality...", command=self.quality_menu)
+        x, y = self.win.winfo_pointerxy()
+        menu.tk_popup(x, y)
+
     def quality_menu(self):
         import tkinter as tk
         menu = tk.Menu(self.win, tearoff=0, bg="#141721", fg="#f1f3f8", activebackground="#7c5cff",
@@ -522,6 +565,12 @@ class PhoneWindow:
 
     def close(self):
         self.link.stop()
+        if self._fine_timer:
+            try:
+                import ctypes
+                ctypes.windll.winmm.timeEndPeriod(1)
+            except Exception:
+                pass
         self.win.destroy()
 
     def winfo_exists(self):

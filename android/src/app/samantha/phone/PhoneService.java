@@ -446,6 +446,12 @@ public class PhoneService extends AccessibilityService {
             case "touch":
                 touch(c.getString("a"), (float) c.getDouble("x"), (float) c.getDouble("y"));
                 break;
+            case "scroll":
+                scroll((float) c.getDouble("x"), (float) c.getDouble("y"), (float) c.getDouble("dy"));
+                break;
+            case "pinch":
+                pinch((float) c.getDouble("x"), (float) c.getDouble("y"), c.optBoolean("in"));
+                break;
             case "tap":
                 swipe(new float[][]{{(float) c.getDouble("x"), (float) c.getDouble("y")}}, 50);
                 break;
@@ -488,6 +494,63 @@ public class PhoneService extends AccessibilityService {
                 .addStroke(new GestureDescription.StrokeDescription(path, 0, ms))
                 .build();
         dispatchGesture(gesture, null, null);
+    }
+
+    /**
+     * The PC's mouse wheel: drag by dy (a fraction of the screen; negative = up) and hold still before letting go, so
+     * the page moves exactly that far instead of flinging on.
+     */
+    private void scroll(float fx, float fy, float dy) {
+        DisplayMetrics m = realMetrics();
+        float from = fy, to = fy + dy;
+        if (to < 0.05f) { from += 0.05f - to; to = 0.05f; }
+        if (to > 0.95f) { from -= to - 0.95f; to = 0.95f; }
+        from = Math.max(0.02f, Math.min(0.98f, from));
+        float x = pixel(fx, m.widthPixels), y0 = pixel(from, m.heightPixels), y1 = pixel(to, m.heightPixels);
+        Path move = new Path();
+        move.moveTo(x, y0);
+        move.lineTo(x, y1);
+        GestureDescription.StrokeDescription drag = new GestureDescription.StrokeDescription(move, 0, 140, true);
+        stroke = null;   // a wheel scroll replaces a live finger
+        dispatchGesture(new GestureDescription.Builder().addStroke(drag).build(), new GestureResultCallback() {
+            @Override
+            public void onCompleted(GestureDescription g) {
+                Path hold = new Path();
+                hold.moveTo(x, y1);
+                hold.lineTo(x, y1);
+                try {
+                    dispatchGesture(new GestureDescription.Builder().addStroke(drag.continueStroke(hold, 0, 80, false)).build(),
+                            null, null);
+                } catch (IllegalStateException | IllegalArgumentException ignored) {
+                    // the phone ended the gesture itself
+                }
+            }
+        }, main);
+    }
+
+    /** Ctrl + wheel on the PC: two fingers moving apart (zoom in) or together (zoom out) around (x, y). */
+    private void pinch(float fx, float fy, boolean zoomIn) {
+        DisplayMetrics m = realMetrics();
+        float cx = pixel(fx, m.widthPixels), cy = pixel(fy, m.heightPixels);
+        float near = m.widthPixels * 0.05f, far = m.widthPixels * 0.22f;
+        float a = zoomIn ? near : far, b = zoomIn ? far : near;
+        GestureDescription.Builder g = new GestureDescription.Builder();
+        for (int side = -1; side <= 1; side += 2) {
+            Path p = new Path();
+            p.moveTo(clampX(cx + side * a, m), clampY(cy + side * a, m));
+            p.lineTo(clampX(cx + side * b, m), clampY(cy + side * b, m));
+            g.addStroke(new GestureDescription.StrokeDescription(p, 0, 220));
+        }
+        stroke = null;
+        dispatchGesture(g.build(), null, null);
+    }
+
+    private static float clampX(float x, DisplayMetrics m) {
+        return Math.max(0f, Math.min(m.widthPixels - 1f, x));
+    }
+
+    private static float clampY(float y, DisplayMetrics m) {
+        return Math.max(0f, Math.min(m.heightPixels - 1f, y));
     }
 
     // A live finger: the PC sends down / move / up as the mouse moves, and the finger follows. Android plays a

@@ -93,6 +93,15 @@ def qr_image(text: str, size: int) -> ctk.CTkImage:
     return ctk.CTkImage(light_image=img, dark_image=img, size=(size, size))
 
 
+def put(widget, **options) -> None:
+    """widget.configure(**options), but only when they differ from last time: every configure redraws."""
+    last = getattr(widget, "_mirra_last", None)
+    if last == options:
+        return
+    widget._mirra_last = dict(options)
+    widget.configure(**options)
+
+
 def ago(timestamp: float) -> str:
     seconds = max(0, time.time() - timestamp)
     if seconds < 90:
@@ -115,6 +124,22 @@ def tailscale_info() -> dict:
     except tailscale.BindError:
         info["state"] = "Stopped"
     return info
+
+
+HELP = [
+    ("The phone says \"Can't reach your PC\"",
+     "Switch Tailscale on in the phone. Keep this PC on and awake (Windows Settings > System > Power: never sleep "
+     "while plugged in), and Mirra on (Home)."),
+    ("The QR code's link does not open on the phone", "Tailscale must be on in the phone: the page comes from this PC."),
+    ("\"Restricted setting\" when switching Mirra on in the phone",
+     "Mirra was installed straight from the downloaded file. In Mirra on the phone, tap Get Mirra Setup, open it and "
+     "tap Install Mirra again."),
+    ("The phone window stays black or says \"Waiting for your phone\"",
+     "In Mirra on the phone, \"This phone on your PC\" must be on and not paused. Banking apps and password screens "
+     "always show black (Android hides them)."),
+    ("It is not smooth", "Under My phone, choose 720p and 30 fps. On Wi-Fi at home it can go higher."),
+    ("A phone was lost", "Settings > Phones > Sign out all phones. Every phone then needs to scan the code again."),
+]
 
 
 # -- the window ------------------------------------------------------------------------------------
@@ -502,11 +527,11 @@ class SetupPage(Page):
                            "menu or the tray, sign in, then click Check again."), WARN
         else:
             text, color = f"Connected as {ts['name'] or ts['ip']} ({ts['ip']}).", OK
-        self.ts_text.configure(text=text, text_color=color)
-        self.install_btn.configure(state="disabled" if ts and ts["installed"] else "normal")
-        self.start_btn.configure(state="normal" if running and not self.app.busy else "disabled")
+        put(self.ts_text, text=text, text_color=color)
+        put(self.install_btn, state="disabled" if ts and ts["installed"] else "normal")
+        put(self.start_btn, state="normal" if running and not self.app.busy else "disabled")
         if self.app.busy:
-            self.start_text.configure(text=self.app.busy)
+            put(self.start_text, text=self.app.busy)
 
     def install_tailscale(self):
         if not shutil.which("winget"):
@@ -545,6 +570,14 @@ class SetupPage(Page):
 class HomePage(Page):
     title = "Home"
 
+    # The guide on this page: what to do, one step at a time, each ticked off when Mirra sees it done.
+    STEPS = [
+        ("Put Tailscale on your phone", "The free private network between your phone and this PC."),
+        ("Scan the code with your phone", "It installs Mirra and connects it to this PC."),
+        ("Let this PC see your phone", "One switch in the Mirra app on the phone."),
+        ("Open your phone on this PC", "Use it with your mouse and keyboard."),
+    ]
+
     def build(self):
         # status
         box = self.section()
@@ -562,46 +595,21 @@ class HomePage(Page):
         self.power.pack(side="right")
         self.power_busy = False
 
-        # connect a phone
-        box = self.section("Connect a phone", "Pair once; your phone remembers this PC.")
+        # the guide
+        box = self.section("Connect your phone", "Follow the steps. Each one ticks itself off when it is done.")
         cols = ctk.CTkFrame(box, fg_color="transparent")
         cols.pack(fill="x", pady=(16, 0))
-        qr_box = ctk.CTkFrame(cols, fg_color="#ffffff", corner_radius=16)
-        qr_box.pack(side="left", anchor="n")
-        self.qr = ctk.CTkLabel(qr_box, text="Waiting for Mirra...", text_color="#1d1650", width=200, height=200)
-        self.qr.pack(padx=10, pady=10)
-        self.qr_for = None
-        steps = ctk.CTkFrame(cols, fg_color="transparent")
-        steps.pack(side="left", fill="x", expand=True, padx=(26, 0))
-        self._step(steps, "1", "Put Tailscale on your phone", "Sign in with the same account as this PC and switch it on.",
-                   ("Tailscale for Android", TAILSCALE_ANDROID))
-        self._step(steps, "2", "Scan this code with the phone's camera",
-                   "It installs Mirra if needed and connects by itself.")
-        ctk.CTkFrame(steps, fg_color=LINE, height=1).pack(fill="x", pady=(14, 10))
-        label(steps, "No camera? In the Mirra app, type:", 12, MUTED).pack(anchor="w")
-        pills = ctk.CTkFrame(steps, fg_color="transparent")
-        pills.pack(anchor="w", pady=(6, 0))
-        self.name_pill = self._pill(pills, "PC", "-")
-        self.code_pill = self._pill(pills, "Code", "--- ---")
-        self.code_sub = label(steps, "", 12, MUTED)
-        self.code_sub.pack(anchor="w", pady=(6, 0))
+        steps = ctk.CTkFrame(cols, fg_color="transparent", width=330)
+        steps.pack(side="left", anchor="n", fill="y")
+        self.rows = [self._step_row(steps, i, t, s) for i, (t, s) in enumerate(self.STEPS)]
+        self.panel = ctk.CTkFrame(cols, fg_color=CARD2, corner_radius=16)
+        self.panel.pack(side="left", fill="both", expand=True, padx=(22, 0))
+        self.panels = [self._panel_tailscale(), self._panel_scan(), self._panel_allow(), self._panel_open()]
+        self.done = [False] * 4
+        self.selected = None      # a step the user clicked; None = follow the first one not done
+        self.shown = None
         self.asked_code = 0.0
-
-        # the phone
-        box = self.section()
-        row = ctk.CTkFrame(box, fg_color="transparent")
-        row.pack(fill="x")
-        glyph = self.app.icons
-        ctk.CTkLabel(row, text=ICONS["phone"] if glyph else "", text_color=CYAN,
-                     font=ctk.CTkFont(family=glyph or FONT, size=26)).pack(side="left", padx=(0, 14))
-        texts = ctk.CTkFrame(row, fg_color="transparent")
-        texts.pack(side="left", fill="x", expand=True)
-        self.phone_title = label(texts, "No phone yet", 16, weight="bold")
-        self.phone_title.pack(anchor="w")
-        self.phone_sub = label(texts, "Connect one above.", 13, MUTED, wrap=520)
-        self.phone_sub.pack(anchor="w")
-        self.open_btn = button(row, "Open phone window", self.app.open_phone, width=180, height=42)
-        self.open_btn.pack(side="right")
+        self.qr_for = None
 
         self.update_box = self.section()
         row = ctk.CTkFrame(self.update_box, fg_color="transparent")
@@ -614,29 +622,130 @@ class HomePage(Page):
         label(self.content, "Closing this window does not stop Mirra; it keeps running in the background.", 12,
               MUTED).pack(anchor="w", padx=34, pady=(0, 20))
 
-    def _step(self, parent, number, title, text, link=None):
-        row = ctk.CTkFrame(parent, fg_color="transparent")
-        row.pack(fill="x", pady=(0, 12))
-        badge = ctk.CTkLabel(row, text=number, width=30, height=30, corner_radius=15, fg_color=ACCENT,
-                             text_color="#ffffff", font=font(13, "bold"))
-        badge.pack(side="left", anchor="n", padx=(0, 12))
+    # -- the step list ------------------------------------------------------------------------------
+    def _step_row(self, parent, i, title, sub):
+        row = ctk.CTkFrame(parent, fg_color="transparent", corner_radius=14, cursor="hand2")
+        row.pack(fill="x", pady=3)
+        badge = ctk.CTkLabel(row, text=str(i + 1), width=34, height=34, corner_radius=17, fg_color=CARD2,
+                             text_color=MUTED, font=font(14, "bold"))
+        badge.pack(side="left", padx=(10, 12), pady=10)
         texts = ctk.CTkFrame(row, fg_color="transparent")
-        texts.pack(side="left", fill="x", expand=True)
-        label(texts, title, 14, weight="bold").pack(anchor="w")
-        label(texts, text, 13, MUTED, wrap=420).pack(anchor="w")
-        if link:
-            a = label(texts, link[0], 13, CYAN, cursor="hand2")
-            a.pack(anchor="w")
-            a.bind("<Button-1>", lambda e: webbrowser.open(link[1]))
+        texts.pack(side="left", fill="x", expand=True, pady=8)
+        t = label(texts, title, 14, MUTED, weight="bold")
+        t.pack(anchor="w")
+        s = label(texts, sub, 12, MUTED, wrap=250)
+        s.pack(anchor="w")
+        for w in (row, badge, texts, t, s):
+            w.bind("<Button-1>", lambda e, n=i: self._select(n))
+        return row, badge, t
+
+    def _select(self, n):
+        self.selected = n
+        self._show_panel(n)
+
+    def _current(self) -> int:
+        if self.selected is not None:
+            return self.selected
+        return next((i for i, d in enumerate(self.done) if not d), 3)
+
+    def _show_panel(self, n):
+        for i, (row, badge, title) in enumerate(self.rows):
+            done, current = self.done[i], i == n
+            put(row, fg_color=CARD2 if current else "transparent")
+            put(badge, text="✓" if done else str(i + 1),
+                            fg_color=OK if done else (ACCENT if current else CARD2),
+                            text_color="#0b0d12" if done else ("#ffffff" if current else MUTED))
+            put(title, text_color=TEXT if (current or done) else MUTED)
+        if self.shown != n:
+            for p in self.panels:
+                p.pack_forget()
+            self.panels[n].pack(fill="both", expand=True, padx=22, pady=18)
+            self.shown = n
+
+    # -- what to do for each step ---------------------------------------------------------------------
+    def _panel(self):
+        return ctk.CTkFrame(self.panel, fg_color="transparent")
+
+    def _panel_tailscale(self):
+        p = self._panel()
+        label(p, "Step 1: Tailscale on your phone", 16, weight="bold").pack(anchor="w")
+        row = ctk.CTkFrame(p, fg_color="transparent")
+        row.pack(fill="x", pady=(12, 0))
+        qr_box = ctk.CTkFrame(row, fg_color="#ffffff", corner_radius=14)
+        qr_box.pack(side="left", anchor="n")
+        ctk.CTkLabel(qr_box, text="", image=qr_image(TAILSCALE_ANDROID, 150)).pack(padx=8, pady=8)
+        texts = ctk.CTkFrame(row, fg_color="transparent")
+        texts.pack(side="left", fill="x", expand=True, padx=(18, 0))
+        for line in ("1.  Scan this code with your phone's camera: it opens Tailscale in the Play Store.",
+                     "2.  Install it and open it.",
+                     "3.  Sign in with the same account as on this PC.",
+                     "4.  Switch it on (it asks to add a VPN: tap OK)."):
+            label(texts, line, 13, TEXT, wrap=230).pack(anchor="w", pady=2)
+        button(p, "Done, next step", lambda: self._select(1), width=160).pack(anchor="e", pady=(14, 0))
+        return p
+
+    def _panel_scan(self):
+        p = self._panel()
+        label(p, "Step 2: scan this code with your phone", 16, weight="bold").pack(anchor="w")
+        row = ctk.CTkFrame(p, fg_color="transparent")
+        row.pack(fill="x", pady=(12, 0))
+        qr_box = ctk.CTkFrame(row, fg_color="#ffffff", corner_radius=14)
+        qr_box.pack(side="left", anchor="n")
+        self.qr = ctk.CTkLabel(qr_box, text="Waiting for Mirra...", text_color="#1d1650", width=190, height=190)
+        self.qr.pack(padx=8, pady=8)
+        texts = ctk.CTkFrame(row, fg_color="transparent")
+        texts.pack(side="left", fill="x", expand=True, padx=(18, 0))
+        for line in ("1.  Open the phone's camera and point it at the code. Tap the link that appears.",
+                     "2.  Tap \"Open Mirra and connect\".",
+                     "3.  The first time it downloads Mirra Setup: open it, install it, tap \"Install Mirra\", "
+                     "then tap \"Open Mirra and connect\" again."):
+            label(texts, line, 13, TEXT, wrap=230).pack(anchor="w", pady=2)
+        label(texts, "No camera? In the Mirra app type:", 12, MUTED).pack(anchor="w", pady=(10, 2))
+        pills = ctk.CTkFrame(texts, fg_color="transparent")
+        pills.pack(anchor="w")
+        self.name_pill = self._pill(pills, "PC", "-")
+        self.code_pill = self._pill(pills, "Code", "--- ---")
+        return p
+
+    def _panel_allow(self):
+        p = self._panel()
+        label(p, "Step 3: let this PC see your phone", 16, weight="bold").pack(anchor="w")
+        label(p, "On the phone, in the Mirra app:", 13, MUTED).pack(anchor="w", pady=(10, 4))
+        for line in ("1.  Under \"This phone on your PC\", tap Turn it on.",
+                     "2.  In the list, tap Mirra.",
+                     "3.  Switch on \"Use Mirra\".",
+                     "4.  Android asks \"Allow Mirra to have full control?\": tap Allow."):
+            label(p, line, 13, TEXT, wrap=400).pack(anchor="w", pady=2)
+        label(p, "You do this once. While this PC looks at the phone, the phone shows a notification.", 12, MUTED,
+              wrap=400).pack(anchor="w", pady=(10, 0))
+        self.allow_status = label(p, "", 13, WARN, wrap=400)
+        self.allow_status.pack(anchor="w", pady=(10, 0))
+        return p
+
+    def _panel_open(self):
+        p = self._panel()
+        self.ready_title = label(p, "Step 4: your phone, on this PC", 16, weight="bold")
+        self.ready_title.pack(anchor="w")
+        self.ready_sub = label(p, "", 13, MUTED, wrap=400)
+        self.ready_sub.pack(anchor="w", pady=(6, 0))
+        self.open_btn = button(p, "Open phone window", self.app.open_phone, width=200, height=44)
+        self.open_btn.pack(anchor="w", pady=(14, 0))
+        label(p, "Click to tap, drag to swipe, right click is Back. More under My phone.", 12, MUTED,
+              wrap=480).pack(anchor="w", pady=(12, 0))
+        a = label(p, "Connect another phone", 13, CYAN, cursor="hand2")
+        a.pack(anchor="w", pady=(10, 0))
+        a.bind("<Button-1>", lambda e: self._select(1))
+        return p
 
     def _pill(self, parent, name, value):
-        pill = ctk.CTkFrame(parent, fg_color=CARD2, corner_radius=12, border_width=1, border_color=LINE)
+        pill = ctk.CTkFrame(parent, fg_color=CARD, corner_radius=12, border_width=1, border_color=LINE)
         pill.pack(side="left", padx=(0, 10))
         label(pill, name, 11, MUTED).pack(anchor="w", padx=14, pady=(8, 0))
         v = label(pill, value, 20, weight="bold")
         v.pack(anchor="w", padx=14, pady=(0, 8))
         return v
 
+    # -- keeping it up to date ----------------------------------------------------------------------------
     def refresh(self, snap):
         app = self.app
         auto = snap.get("autostart")
@@ -651,22 +760,22 @@ class HomePage(Page):
             if server.get("error"):
                 color, sub = WARN, f"The screen can't be captured right now: {server['error']}"
         elif ts and ts.get("state") not in (None, "", "Running"):
-            color, title, sub = WARN, "Waiting for Tailscale", "Open Tailscale and sign in or switch it on."
+            color, title, sub = WARN, "Waiting for Tailscale on this PC", "Open Tailscale (in the taskbar corner) and sign in or switch it on."
         elif snap.get("server_error") == "refused":
             color, title, sub = BAD, "Mirra did not accept this window", "Its settings changed. Close this window and open it again."
         else:
             color, title, sub = WARN, "Starting...", "It can take a minute after Windows starts."
-        self.dot.configure(text_color=color)
-        self.state_text.configure(text=title)
-        self.state_sub.configure(text=sub)
-        if not self.power_busy:
+        put(self.dot, text_color=color)
+        put(self.state_text, text=title)
+        put(self.state_sub, text=sub)
+        if not self.power_busy and bool(self.power.get()) != (auto != "disabled"):
             (self.power.deselect if auto == "disabled" else self.power.select)()
-        self.power.configure(state="disabled" if app.busy else "normal")
+        put(self.power, state="disabled" if app.busy else "normal")
 
-        # pairing: keep a fresh code (and its QR code) whenever this page is open
+        # pairing: keep a fresh code (and its QR code) while this page is open
         port = app.local.cfg.port if app.local else config.DEFAULT_PORT
         name = ts.get("name") or ts.get("ip") or "-"
-        self.name_pill.configure(text=name if port == config.DEFAULT_PORT else f"{name}:{port}")
+        put(self.name_pill, text=name if port == config.DEFAULT_PORT else f"{name}:{port}")
         pair = snap.get("pair") or {}
         code = pair.get("code")
         if server and (not code or code["expires_in"] < 90) and time.monotonic() - self.asked_code > 8:
@@ -674,36 +783,44 @@ class HomePage(Page):
             app.background(lambda: app.local.post("/api/pair/code"), lambda *_: app.refresh_soon())
         if code and ts.get("ip"):
             c = code["code"]
-            self.code_pill.configure(text=f"{c[:3]} {c[3:]}")
-            self.code_sub.configure(text="The code changes every few minutes; the phone only needs it once.")
+            put(self.code_pill, text=f"{c[:3]} {c[3:]}")
             url = f"http://{ts['ip']}:{port}/join?c={c}"
             if url != self.qr_for:
                 self.qr_for = url
-                self.qr.configure(image=qr_image(url, 200), text="")
+                put(self.qr, image=qr_image(url, 190), text="")
         else:
-            self.code_pill.configure(text="--- ---")
+            put(self.code_pill, text="--- ---")
             if not server:
-                self.qr.configure(image=None, text="Mirra is not\nrunning yet")
+                put(self.qr, image=None, text="Mirra is not\nrunning yet")
                 self.qr_for = None
 
+        # the steps that are done: the phone app talked to this PC (paired); the phone shares (switch on)
         phone = snap.get("phone") or {}
-        paired = pair.get("paired") or []
-        if phone.get("connected"):
-            self.phone_title.configure(text=phone.get("device") or "Your phone")
-            version = phone.get("app_version") or ""
-            self.phone_sub.configure(text="Connected. Open its window to see it and use it with your mouse."
-                                     + (f"   App {version}" if version else ""), text_color=OK)
-            self.open_btn.configure(state="normal")
+        seen = phone.get("app_seen")
+        paired = bool(pair.get("paired")) or (seen is not None and seen < 600) or phone.get("connected")
+        sharing = bool(phone.get("connected"))
+        self.done = [paired or sharing, paired or sharing, sharing, False]
+        if sharing:
+            device = phone.get("device") or "Your phone"
+            put(self.ready_title, text=f"{device} is ready")
+            put(self.ready_sub, text="Open its window to see it and use it with your mouse and keyboard."
+                                     + ("" if phone.get("control", True) else
+                                        " (The phone allows viewing only: its own switch.)"))
+            put(self.open_btn, state="normal")
         else:
-            self.phone_title.configure(text="No phone connected")
-            hint = f"Last paired: {paired[-1]['device']} ({ago(paired[-1]['at'])}). " if paired else ""
-            self.phone_sub.configure(text=hint + "Open Mirra on your phone and switch on \"Let the PC see this phone\".",
-                                     text_color=MUTED)
-            self.open_btn.configure(state="normal" if server else "disabled")
+            put(self.ready_title, text="Step 4: your phone, on this PC")
+            put(self.ready_sub, text="Waiting for your phone. Do steps 1 to 3 first.")
+            put(self.open_btn, state="disabled")
+        if paired and not sharing:
+            put(self.allow_status, text="Waiting for the switch on the phone..." if seen is not None and seen < 60
+                                        else "Open the Mirra app on your phone.")
+        else:
+            put(self.allow_status, text="")
+        self._show_panel(self._current())
 
         release = app.release
         if release:
-            self.update_text.configure(text=f"Mirra {release.version} is available  (you have {__version__})")
+            put(self.update_text, text=f"Mirra {release.version} is available  (you have {__version__})")
             if not self.update_box.master.winfo_ismapped():
                 self.update_box.master.pack(fill="x", padx=32, pady=(0, 16), before=self.content.winfo_children()[-1])
         elif self.update_box.master.winfo_ismapped():
@@ -793,20 +910,20 @@ class PhonePage(Page):
         phone = snap.get("phone") or {}
         server = snap.get("server")
         if not server:
-            self.device.configure(text="Mirra is not running")
-            self.device_sub.configure(text="Turn it on under Home.")
-            self.open_btn.configure(state="disabled")
+            put(self.device, text="Mirra is not running")
+            put(self.device_sub, text="Turn it on under Home.")
+            put(self.open_btn, state="disabled")
         elif phone.get("connected"):
-            self.device.configure(text=phone.get("device") or "Your phone")
-            self.device_sub.configure(text="Connected. The window opens at the phone's own shape; you can resize it."
+            put(self.device, text=phone.get("device") or "Your phone")
+            put(self.device_sub, text="Connected. The window opens at the phone's own shape; you can resize it."
                                       if phone.get("control", True) else
                                       "Connected, view only: the phone does not allow tapping (its own switch).")
-            self.open_btn.configure(state="normal")
+            put(self.open_btn, state="normal")
         else:
-            self.device.configure(text="No phone connected")
-            self.device_sub.configure(text="Open Mirra on your phone. Under \"This phone on your PC\", switch it on. "
+            put(self.device, text="No phone connected")
+            put(self.device_sub, text="Open Mirra on your phone. Under \"This phone on your PC\", switch it on. "
                                       "Not paired yet? Scan the code on Home.")
-            self.open_btn.configure(state="normal")
+            put(self.open_btn, state="normal")
 
 
 class SettingsPage(Page):
@@ -838,6 +955,11 @@ class SettingsPage(Page):
                            "own devices.")
         button(box, "Show the link", self.show_browser_link, "plain", width=150).pack(anchor="w", pady=(12, 0))
 
+        box = self.section("Help", "The usual problems, and what fixes them.")
+        for question, answer in HELP:
+            label(box, question, 14, TEXT, weight="bold", wrap=680).pack(anchor="w", pady=(12, 0))
+            label(box, answer, 13, MUTED, wrap=680).pack(anchor="w")
+
         box = self.section("About")
         label(box, f"Mirra {__version__}. Free and open source (MIT).", 13, MUTED).pack(anchor="w", pady=(4, 0))
         row = ctk.CTkFrame(box, fg_color="transparent")
@@ -848,10 +970,10 @@ class SettingsPage(Page):
     def refresh(self, snap):
         server = snap.get("server") or {}
         audio = server.get("audio")
-        if audio is not None and not self.app.busy:
+        if audio is not None and not self.app.busy and bool(self.sound.get()) != bool(audio.get("enabled")):
             (self.sound.select if audio.get("enabled") else self.sound.deselect)()
-        self.sound.configure(state="normal" if server and not self.app.busy else "disabled")
-        self.version.configure(text=f"   You have Mirra {__version__}" + (f"   {self.app.busy}" if self.app.busy else ""))
+        put(self.sound, state="normal" if server and not self.app.busy else "disabled")
+        put(self.version, text=f"   You have Mirra {__version__}" + (f"   {self.app.busy}" if self.app.busy else ""))
 
     def set_sound(self):
         config.set_env_value("SM_AUDIO", "1" if self.sound.get() else "0")

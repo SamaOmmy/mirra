@@ -22,6 +22,10 @@ def test_good_events_are_accepted_and_cleaned():
     assert parse_input({"t": "long", "x": 0, "y": 0})["t"] == "long"
     assert parse_input({"t": "key", "k": "home"}) == {"t": "key", "k": "home"}
     assert parse_input({"t": "text", "s": "hello"}) == {"t": "text", "s": "hello"}
+    assert parse_input({"t": "touch", "a": "move", "x": 0.1, "y": 0.2}) == {"t": "touch", "a": "move", "x": 0.1, "y": 0.2}
+    assert parse_input({"t": "scroll", "x": 0.5, "y": 0.5, "dy": -0.24})["dy"] == -0.24
+    assert parse_input({"t": "pinch", "x": 0.5, "y": 0.5, "in": True})["in"] is True
+    assert parse_input({"t": "key", "k": "volup"})["k"] == "volup"
     swipe = parse_input({"t": "gesture", "pts": [[0.5, 0.8], [0.5, 0.2]], "ms": 250})
     assert swipe == {"t": "gesture", "pts": [[0.5, 0.8], [0.5, 0.2]], "ms": 250}
 
@@ -30,7 +34,8 @@ def test_good_events_are_accepted_and_cleaned():
     None, [], "tap", {}, {"t": "reboot"},
     {"t": "tap", "x": 2, "y": 0}, {"t": "tap", "x": -0.1, "y": 0}, {"t": "tap", "x": "0.5", "y": 0},
     {"t": "tap", "x": True, "y": 0}, {"t": "tap", "x": float("nan"), "y": 0}, {"t": "tap", "y": 0},
-    {"t": "key", "k": "poweroff"}, {"t": "key"},
+    {"t": "key", "k": "poweroff"}, {"t": "key"}, {"t": "touch", "a": "hover", "x": 0, "y": 0},
+    {"t": "scroll", "x": 0, "y": 0, "dy": 3}, {"t": "pinch", "x": 2, "y": 0},
     {"t": "text", "s": ""}, {"t": "text", "s": "x" * 501}, {"t": "text", "s": 5},
     {"t": "gesture", "pts": [[0, 0]], "ms": 100}, {"t": "gesture", "pts": [[0, 0]] * 201, "ms": 100},
     {"t": "gesture", "pts": [[0, 0], [1]], "ms": 100}, {"t": "gesture", "pts": [[0, 0], [1, 9]], "ms": 100},

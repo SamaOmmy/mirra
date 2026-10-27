@@ -3,6 +3,12 @@
     package="app.samantha.phone">
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- to say whether Tailscale is on -->
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
+    <queries>
+        <package android:name="com.tailscale.ipn" />
+    </queries>
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <!-- smooth video of the screen for the Mirra window on the PC -->

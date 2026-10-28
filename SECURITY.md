@@ -33,9 +33,10 @@ built to be private by default.
   during the few seconds after it asked). A notification shows while it records; it stops when the window closes.
 - **Pairing page.** The QR code on the PC opens `/join` on the PC: a page without secrets (the code in its address came
   from the PC screen and runs out), and `/download/setup` serves Mirra Setup, which holds no secrets either.
-- **App updates.** The phone app only installs updates from the PC it is paired with (over the same token-protected
-  connection), and Android checks that every update is signed with the same key as the installed app and asks you
-  to confirm it.
+- **App updates.** The phone app installs updates from this project's GitHub releases (over HTTPS; it checks that the
+  file holds Mirra of the announced version), or else from the PC it is paired with (over the same token-protected
+  connection). Either way Android checks that every update is signed with the same key as the installed app and asks
+  you to confirm it.
 
 ## What you should know
 

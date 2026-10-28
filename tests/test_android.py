@@ -68,6 +68,20 @@ def test_the_android_app_builds_and_is_a_valid_signed_apk(tmp_path):
     with zipfile.ZipFile(out.with_name("SamanthaSetup.apk")) as setup:
         assert setup.read(f"assets/{opened}") == out.read_bytes()
         assert any(n.startswith("META-INF/") for n in setup.namelist())
+        # ... and where the app's own updater takes it out of the released Setup file
+        assert setup.read(_updater_constant("INSIDE_SETUP")) == out.read_bytes()
+
+
+def _updater_constant(name: str) -> str:
+    source = (ANDROID / "src/app/samantha/phone/Updater.java").read_text(encoding="utf-8")
+    return re.search(rf'static final String {name} = "([^"]+)"', source).group(1)
+
+
+def test_the_phone_updates_from_the_files_the_release_publishes():
+    from samantha_mirror import updater
+    script = (ROOT / "packaging/build-release.ps1").read_text(encoding="utf-8")
+    assert '"$out\\' + _updater_constant("SETUP_FILE") + '"' in script
+    assert _updater_constant("REPO") == updater.REPO
 
 
 @needs_tools

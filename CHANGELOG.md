@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.3
+
+- **The phone app updates straight from GitHub**, like the PC: when a new version is published, Mirra on the phone
+  shows the *Update available* pop-up by itself, even when the PC is off or not updated yet. (Before, the phone
+  only got updates through the PC.) If GitHub can't be reached, it still takes the matching version from the PC.
+
 ## 0.6.2
 
 New

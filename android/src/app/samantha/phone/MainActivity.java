@@ -52,8 +52,11 @@ public class MainActivity extends Activity {
     private View lowDataRow;
     private volatile String online;       // null while unknown, "" when the PC answers, else the problem
     private volatile String pcVersion = "";
+    private static volatile String gitHubVersion = "";   // the newest release on GitHub, "" while unknown
+    private static long gitHubChecked;                    // when GitHub was last asked (uptime ms)
     private String offered = "";          // the update version already offered in a pop-up
     private boolean updating;
+    private int checks;                   // the newest checkLoop runs; older ones stop
 
     @Override
     protected void onCreate(Bundle saved) {
@@ -76,7 +79,8 @@ public class MainActivity extends Activity {
         super.onResume();
         visible = true;
         main.post(tick);
-        new Thread(this::checkLoop, "mirra-check").start();
+        int generation = ++checks;
+        new Thread(() -> checkLoop(generation), "mirra-check").start();
     }
 
     @Override
@@ -443,6 +447,7 @@ public class MainActivity extends Activity {
     }
 
     private void refresh() {
+        offerUpdateIfAny();
         refreshTailscale();
         if (!prefs.paired() || pcName == null) return;
         String o = online;
@@ -467,26 +472,32 @@ public class MainActivity extends Activity {
         else if (PhoneService.instance == null) phoneStatus.setText("Starting...");
         else phoneStatus.setText(PhoneService.status);
         if (o != null && !o.isEmpty()) phoneStatus.setText(o);
-        if (Updater.newerOnPc(this, pcVersion) && !updating && !offered.equals(pcVersion)) {
-            offered = pcVersion;
-            offerUpdate(pcVersion);
-        }
     }
 
-    /** The pop-up: a newer Mirra is on the PC. */
-    private void offerUpdate(String version) {
+    /** A newer Mirra on GitHub (or, when GitHub can't be reached, on the PC): offer it once. */
+    private void offerUpdateIfAny() {
+        String gitHub = gitHubVersion, pc = pcVersion;
+        boolean fromGitHub = Updater.newer(this, gitHub) && (pc.isEmpty() || Net.compareVersions(gitHub, pc) >= 0);
+        String version = fromGitHub ? gitHub : pc;
+        if (updating || !Updater.newer(this, version) || offered.equals(version)) return;
+        offered = version;
         new AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
                 .setTitle("Update available")
                 .setMessage("Mirra " + version + " is ready (you have " + Updater.installedVersion(this) + "). "
-                        + "It downloads from your PC in a few seconds.")
-                .setPositiveButton("Update now", (d, w) -> update())
+                        + "It downloads in a few seconds.")
+                .setPositiveButton("Update now", (d, w) -> update(version, fromGitHub))
                 .setNegativeButton("Later", null)
                 .show();
     }
 
-    /** While this screen is open: is the PC there, and does it have a newer app? */
-    private void checkLoop() {
-        while (visible) {
+    /** While this screen is open: is there a new release, is the PC there, and does it have a newer app? */
+    private void checkLoop(int generation) {
+        while (visible && generation == checks) {
+            long now = android.os.SystemClock.elapsedRealtime();
+            if (gitHubChecked == 0 || now - gitHubChecked > 10 * 60_000) {   // GitHub allows 60 asks an hour
+                gitHubChecked = now;
+                gitHubVersion = Updater.latestOnGitHub();
+            }
             if (!prefs.paired()) {
                 online = null;
                 pcVersion = "";
@@ -515,18 +526,20 @@ public class MainActivity extends Activity {
         }
     }
 
-    private void update() {
+    private void update(String version, boolean fromGitHub) {
         if (updating || !Updater.mayInstall(this)) {
             offered = "";   // ask again when the user comes back from allowing installs
             return;
         }
         updating = true;
-        Toast.makeText(this, "Downloading the update from your PC...", Toast.LENGTH_SHORT).show();
+        Toast.makeText(this, "Downloading Mirra " + version + "...", Toast.LENGTH_SHORT).show();
         new Thread(() -> {
             try {
-                Updater.install(this, prefs.server(), prefs.token());
+                if (fromGitHub) Updater.installFromGitHub(this, version);
+                else Updater.installFromPc(this, prefs.server(), prefs.token());
             } catch (Exception e) {
-                main.post(() -> Toast.makeText(this, "The update did not download: " + Net.explain(e), Toast.LENGTH_LONG).show());
+                String why = fromGitHub ? "check the internet and try again (" + e.getMessage() + ")" : Net.explain(e);
+                main.post(() -> Toast.makeText(this, "The update did not download: " + why, Toast.LENGTH_LONG).show());
             } finally {
                 main.postDelayed(() -> updating = false, 5000);
             }

@@ -102,8 +102,9 @@ Both apps update themselves:
 - **PC**: when a new version is out, Mirra shows a pop-up: **Update now** or **Later**. It downloads the new version
   from this project's releases page, checks its SHA-256 checksum, swaps it in (your settings are kept; a failed swap
   puts the old version back), and opens again. It checks every few hours (Settings > Updates).
-- **Phone**: after the PC has updated, the phone app shows a pop-up too and downloads the matching version from your
-  own PC. Android asks you to confirm.
+- **Phone**: when a new version is out, Mirra on the phone shows a pop-up too (**Update now** or **Later**) and
+  downloads it from this project's releases page, the same place as the PC. Android asks you to confirm. If GitHub
+  can't be reached, it takes the matching version from your own PC instead.
 
 **Coming from Samantha Screen Mirror 0.5 or older?** Click *Update now* there (or run `samantha-mirror update`). It
 becomes Mirra, and your shortcuts become *Mirra* shortcuts. On the phone, install Mirra with **Mirra Setup** (it

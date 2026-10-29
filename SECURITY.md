@@ -30,6 +30,11 @@ built to be private by default.
   notification while it does, and has a control switch and a pause switch. It uses Android's Accessibility permission,
   which you grant once and can revoke at any time in Android settings. It cannot see banking-app or password screens
   (Android blocks them).
+- **Notifications on the PC.** When the phone's "Notifications on the PC" switch is on (the default once the
+  Accessibility switch is on), the phone app sends each new notification's app name, title and text to the paired PC,
+  over the same token-protected connection. It skips its own, ongoing ones and ones apps mark as secret, and sends
+  nothing while paused. The PC keeps the latest 30 in memory only (never on disk); anyone with the token can read them,
+  like the screen.
 - **Live phone link.** The phone's screen (H.264 video) and the touches for it go over a plain TCP port next to the
   web port (SM_PORT + 1), on the same addresses only, with the same token, the same lockout and a size limit on every
   message. It only forwards bytes between the phone and the Mirra window; nothing is decoded on the server.

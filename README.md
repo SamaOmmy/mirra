@@ -1,27 +1,40 @@
-<p align="center"><img src="docs/logo.png" width="120" alt="Mirra"></p>
+<p align="center"><img src="docs/logo.png" width="120" alt="Mirra logo"></p>
 
-<h1 align="center">Mirra</h1>
+<h1 align="center">Mirra: free Android screen mirroring for Windows</h1>
 
 <p align="center"><b>Your PC on your phone. Your phone on your PC.</b><br>
-Private, from anywhere, no cloud. Free and open source.</p>
+Mirror and control your Android phone from your PC, watch your PC on your phone, send files both ways and see your
+phone's notifications on your PC. Private, from anywhere, no cloud. Free and open source.</p>
 
 <p align="center">
-  <img src="docs/screenshots/pc-myphone.png" width="520" alt="Mirra on Windows">
-  <img src="docs/screenshots/pc-phone-window.png" width="180" alt="A phone in the phone window on the PC">
-  <img src="docs/screenshots/android-home.png" width="200" alt="Mirra on Android">
+  <a href="https://github.com/SamaOmmy/mirra/releases/latest/download/Mirra-for-Windows-Setup.exe"><b>Download for Windows</b></a> ·
+  <a href="https://samaommy.github.io/mirra/">Website</a> ·
+  <a href="#set-it-up-5-minutes-once">Set it up</a> ·
+  <a href="#questions">Questions</a>
+</p>
+
+<p align="center">
+  <img src="docs/screenshots/pc-light.png" width="560" alt="Mirra on Windows, light mode: a connected Android phone, its battery and its notifications">
+  <img src="docs/screenshots/android-dark.png" width="200" alt="Mirra on Android, dark mode">
 </p>
 
 Mirra is two apps that work together: **Mirra for Windows** on your PC and **Mirra for Android** on your phone.
 
+- **Use your phone from your PC**: your Android phone in its own window, smooth (up to 60 frames a second) and sharp.
+  Your mouse is your finger, your keyboard types on the phone, Ctrl+V pastes. Pin the window on top while you work.
+  No USB cable, no USB debugging, no developer options.
 - **See your PC on your phone**, live and full screen, with its sound if you want it. Pinch to zoom, take screenshots.
-- **See and use your phone on your PC**, in its own phone-shaped window, smooth (up to 60 pictures a second) and
-  sharp. Your mouse is your finger, your keyboard types on the phone.
 - **Send files both ways**: drop files on the phone window (they land in the phone's Downloads), or tap **Share >
   Mirra** in any app on the phone (they land in `Downloads\Mirra` on the PC).
+- **Your phone's notifications on your PC**, as they arrive, with the phone's battery level.
+- **Light and dark mode** in both apps (follows Windows and Android, or pick one).
 - **Private**: everything goes straight between your own devices through [Tailscale](https://tailscale.com), a free
-  private network. Nobody else, including this project, can see anything.
+  private network (WireGuard). No cloud, no ads, no account with us. Nobody else, including this project, can see
+  anything.
+- **Updates itself**, on the PC and on the phone.
 
-(Mirra was called *Samantha Screen Mirror* before version 0.6.)
+A free, open-source alternative to scrcpy, Phone Link, AirDroid or Vysor for people who want both directions, from
+anywhere, without anything in the middle. (Mirra was called *Samantha Screen Mirror* before version 0.6.)
 
 ## Which file do I download?
 
@@ -81,7 +94,8 @@ Switch on **Play the PC's sound** to hear the PC.
 | Ctrl + V | Paste the PC's clipboard on the phone |
 
 The toolbar beside it has Back, Home, Recent apps, Notifications, volume, lock, **save a screenshot on the PC**
-(into *Pictures\Mirra*) and picture quality (720p / 1080p / Full, 30 / 60 fps, Standard / High / Maximum).
+(into *Pictures\Mirra*), **keep on top** (the pin) and picture quality (720p / 1080p / Full, 30 / 60 fps,
+Standard / High / Maximum). Its title bar shows the phone's battery.
 
 **Files, both ways:**
 
@@ -92,18 +106,26 @@ The toolbar beside it has Back, Home, Recent apps, Notifications, volume, lock, 
 
 Up to 1 GB per file. Sending to the phone needs *This phone on your PC* switched on in the phone app.
 
+**Notifications on the PC:** your phone's notifications pop up at the bottom right of the PC as they arrive (*Open
+phone* opens the phone window), and *My phone* lists the latest ones with the phone's battery. The phone decides:
+*Notifications on the PC* in the phone app (on by default). The PC can turn the pop-ups off (*My phone*). Mirra skips
+its own notifications, ongoing ones (music, downloads) and ones apps mark as secret.
+
+**Light or dark:** both apps follow Windows and Android. To choose yourself: *Settings > Appearance* on the PC,
+*Appearance* in the phone app.
+
 The first time each session the phone asks Android to record its screen, and Mirra answers *Start now* for you, so
 nobody has to tap it. While the PC looks, the phone shows a notification. If recording is not possible, Mirra falls
 back to a few screenshots a second.
 
 **The Mirra window on the PC**: **Home** shows whether Mirra is on (the switch turns it off and keeps it off), the
 QR code to connect a phone and your phone's status. **My phone** opens the phone window and sets its quality.
-**Settings**: sound, updates, *Sign out all phones*, the iPhone link, the log folder.
+**Settings**: appearance, sound, updates, *Sign out all phones*, the iPhone link, the log folder.
 
 Closing the window does not stop Mirra; it keeps running in the background so your phone can always reach the PC.
 
-**On the phone, you stay in control**: *Let the PC tap and type*, *Smooth video* and **Pause** are switches in the
-app, and turning off the Accessibility switch in Android stops it completely. Banking apps and password screens show
+**On the phone, you stay in control**: *Let the PC tap and type*, *Smooth video*, *Notifications on the PC* and
+**Pause** are switches in the app, and turning off the Accessibility switch in Android stops it completely. Banking apps and password screens show
 black on the PC (Android blocks them).
 
 ## Updates
@@ -143,6 +165,24 @@ Android: Mirra ----Tailscale (WireGuard, encrypted)----> PC: Mirra (background s
 - Capture runs only while someone is watching, in both directions.
 
 See [SECURITY.md](SECURITY.md) for the full threat model.
+
+## Questions
+
+**Is Mirra free?** Yes: free and open source (MIT), no ads, no subscription, no account with us. The private
+connection uses Tailscale's free plan.
+
+**Does it need USB debugging, ADB or a cable?** No. No developer options at all. It connects over Tailscale, so it
+works on the same Wi-Fi and from anywhere else.
+
+**Does my screen go through the cloud?** No. Picture, sound, files and notifications go straight between your own
+devices, encrypted (WireGuard). Nobody else, including this project, can see them.
+
+**How is it different from scrcpy?** scrcpy is a great open-source tool that needs USB debugging and shows the phone on
+the computer. Mirra needs no developer options, works from anywhere, and also shows your PC on your phone, sends files
+both ways and brings the phone's notifications to the PC.
+
+**Phone Link, AirDroid, Vysor?** Mirra needs no Microsoft account and no account with us, works with any Android 11+
+phone, and nothing passes through a company's server.
 
 ## Troubleshooting
 

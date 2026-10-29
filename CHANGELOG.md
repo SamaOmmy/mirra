@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.8.0
+
+New
+- **Light and dark mode** in both apps. They follow Windows and Android; to choose yourself: *Settings > Appearance*
+  on the PC, *Appearance* in the phone app. Mirra Setup follows the phone too. The full-screen PC view on the phone
+  stays dark, like a video player.
+- **Your phone's notifications on the PC**: they pop up at the bottom right as they arrive (*Open phone* opens the
+  phone window), and *My phone* lists the latest ones. The phone decides (*Notifications on the PC*, on by default);
+  the PC can turn the pop-ups off.
+- **The phone's battery on the PC**: on *My phone* and in the phone window's title bar.
+- **Keep the phone window on top** of other windows (the pin in its toolbar; remembered).
+- **A website**: https://samaommy.github.io/mirra/
+
+Fixes
+- Changing the look or turning the phone sideways no longer runs the pairing link again ("Connected to ..." again).
+
 ## 0.7.0
 
 New

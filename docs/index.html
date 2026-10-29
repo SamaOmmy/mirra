@@ -1,0 +1,272 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mirra: free Android screen mirroring for Windows. Control your phone from your PC</title>
+<meta name="description" content="Mirra is a free, open-source app that mirrors and controls your Android phone from your Windows PC, shows your PC on your phone, sends files both ways and brings phone notifications to your PC. Private: no cloud, no ads.">
+<meta name="keywords" content="screen mirroring, mirror android to pc, control android from pc, android screen mirror windows, phone to pc, pc to phone, scrcpy alternative, phone link alternative, remote desktop android, send files phone to pc, phone notifications on pc, tailscale, open source">
+<link rel="canonical" href="https://samaommy.github.io/mirra/">
+<meta name="theme-color" content="#0b0d12" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#f5f6fa" media="(prefers-color-scheme: light)">
+<link rel="icon" href="logo.png">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Mirra">
+<meta property="og:title" content="Mirra: your PC on your phone, your phone on your PC">
+<meta property="og:description" content="Free, open-source screen mirroring between Windows and Android. Control your phone from your PC, send files both ways, see notifications. No cloud, no ads.">
+<meta property="og:url" content="https://samaommy.github.io/mirra/">
+<meta property="og:image" content="https://samaommy.github.io/mirra/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Mirra: your PC on your phone, your phone on your PC">
+<meta name="twitter:description" content="Free, open-source screen mirroring between Windows and Android. No cloud, no ads.">
+<meta name="twitter:image" content="https://samaommy.github.io/mirra/og.png">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  "name": "Mirra",
+  "alternateName": "Samantha Screen Mirror",
+  "description": "Free, open-source screen mirroring between Windows and Android: mirror and control your Android phone from your PC, watch your PC on your phone, send files both ways and see phone notifications on your PC.",
+  "applicationCategory": "UtilitiesApplication",
+  "operatingSystem": "Windows 10, Windows 11, Android 11+",
+  "url": "https://samaommy.github.io/mirra/",
+  "downloadUrl": "https://github.com/SamaOmmy/mirra/releases/latest",
+  "image": "https://samaommy.github.io/mirra/og.png",
+  "screenshot": "https://samaommy.github.io/mirra/screenshots/pc-light.png",
+  "license": "https://opensource.org/licenses/MIT",
+  "isAccessibleForFree": true,
+  "offers": {"@type": "Offer", "price": "0", "priceCurrency": "USD"},
+  "featureList": ["Mirror and control an Android phone from a Windows PC with the mouse and keyboard", "Up to 60 frames per second", "Watch the PC screen on the phone, with sound", "Send files both ways (drag and drop, Android Share)", "Phone notifications and battery on the PC", "Light and dark mode", "Private: direct, encrypted connection through Tailscale, no cloud"]
+}
+</script>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  "mainEntity": [
+    {"@type": "Question", "name": "Is Mirra free?", "acceptedAnswer": {"@type": "Answer", "text": "Yes. Mirra is free and open source (MIT license), with no ads, no subscription and no account with us. It uses Tailscale's free plan for the private connection."}},
+    {"@type": "Question", "name": "How do I mirror my Android phone to my Windows PC?", "acceptedAnswer": {"@type": "Answer", "text": "Install Mirra for Windows, install Tailscale on the PC and the phone, scan the QR code in Mirra with the phone's camera, then switch on \"This phone on your PC\" in the Mirra app and click Open phone window on the PC."}},
+    {"@type": "Question", "name": "Does Mirra need USB debugging or a cable?", "acceptedAnswer": {"@type": "Answer", "text": "No. There is no developer mode, no ADB and no cable. Mirra connects over Tailscale, so it works on the same Wi-Fi and from anywhere else too."}},
+    {"@type": "Question", "name": "Does my screen go through the cloud?", "acceptedAnswer": {"@type": "Answer", "text": "No. The picture, sound, files and notifications go straight between your own devices through Tailscale's encrypted WireGuard network. Nobody else, including the Mirra project, can see them."}},
+    {"@type": "Question", "name": "Does Mirra work with an iPhone?", "acceptedAnswer": {"@type": "Answer", "text": "An iPhone can watch the PC in Safari. Showing and controlling a phone on the PC needs an Android phone (Android 11 or newer)."}},
+    {"@type": "Question", "name": "How is Mirra different from scrcpy?", "acceptedAnswer": {"@type": "Answer", "text": "scrcpy is a great open-source tool that needs USB debugging (ADB) and mirrors the phone to the computer. Mirra needs no developer options, works from anywhere through Tailscale, and also shows your PC on your phone, sends files both ways and brings phone notifications to the PC."}}
+  ]
+}
+</script>
+<style>
+:root {
+  --bg: #f5f6fa; --bg2: #eceef5; --card: #ffffff; --line: #dde1eb; --text: #151926; --muted: #5c6477;
+  --accent: #6a4cf5; --accent2: #0b8ea6; --hero1: #3b25b8; --hero2: #0c6a7d; --shadow: 0 20px 50px -20px rgba(40, 30, 120, .35);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0b0d12; --bg2: #0e1118; --card: #141721; --line: #262b3a; --text: #f1f3f8; --muted: #8e96a8;
+    --accent: #7c5cff; --accent2: #22d3ee; --hero1: #33238f; --hero2: #0c5566; --shadow: 0 20px 60px -20px rgba(0, 0, 0, .8);
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0b0d12; --bg2: #0e1118; --card: #141721; --line: #262b3a; --text: #f1f3f8; --muted: #8e96a8;
+  --accent: #7c5cff; --accent2: #22d3ee; --hero1: #33238f; --hero2: #0c5566; --shadow: 0 20px 60px -20px rgba(0, 0, 0, .8);
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 17px/1.6 "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, Roboto, "Helvetica Neue", Arial, sans-serif; -webkit-font-smoothing: antialiased; }
+a { color: var(--accent); }
+img { max-width: 100%; height: auto; display: block; }
+.wrap { max-width: 1140px; margin: 0 auto; padding: 0 20px; }
+nav { position: sticky; top: 0; z-index: 10; backdrop-filter: blur(14px); background: color-mix(in srgb, var(--bg) 80%, transparent); border-bottom: 1px solid var(--line); }
+nav .wrap { display: flex; align-items: center; gap: 22px; height: 64px; }
+.brand { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 20px; color: var(--text); text-decoration: none; margin-right: auto; }
+.brand img { width: 34px; height: 34px; border-radius: 9px; }
+nav a.link { color: var(--muted); text-decoration: none; font-weight: 600; font-size: 15px; }
+nav a.link:hover { color: var(--text); }
+.theme { border: 1px solid var(--line); background: var(--card); color: var(--text); border-radius: 10px; width: 38px; height: 38px; cursor: pointer; font-size: 17px; }
+.btn { display: inline-flex; align-items: center; gap: 10px; padding: 14px 22px; border-radius: 14px; font-weight: 700; text-decoration: none; font-size: 16px; transition: transform .15s, box-shadow .15s; }
+.btn:hover { transform: translateY(-2px); }
+.btn.primary { background: linear-gradient(135deg, var(--accent), var(--accent2)); color: #fff; box-shadow: 0 12px 30px -12px var(--accent); }
+.btn.plain { background: var(--card); color: var(--text); border: 1px solid var(--line); }
+.btn svg { width: 20px; height: 20px; }
+header { padding: 72px 0 40px; text-align: center; }
+.badge { display: inline-block; padding: 6px 14px; border-radius: 99px; background: var(--card); border: 1px solid var(--line); color: var(--muted); font-size: 14px; font-weight: 600; }
+h1 { font-size: clamp(36px, 6vw, 66px); line-height: 1.08; letter-spacing: -.03em; margin: 22px 0 18px; }
+h1 span { background: linear-gradient(120deg, var(--accent), var(--accent2)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.lead { font-size: clamp(17px, 2.2vw, 20px); color: var(--muted); max-width: 760px; margin: 0 auto 30px; }
+.ctas { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+.small { color: var(--muted); font-size: 14px; margin-top: 16px; }
+.shots { position: relative; max-width: 1040px; margin: 56px auto 0; padding: 0 20px; }
+.shots .pc { border-radius: 16px; border: 1px solid var(--line); box-shadow: var(--shadow); }
+.shots .phone { position: absolute; right: 0; bottom: -40px; width: 24%; border-radius: 26px; border: 6px solid #0b0d12; box-shadow: var(--shadow); }
+.dark-only { display: none; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .dark-only { display: block; } :root:not([data-theme="light"]) .light-only { display: none; } }
+:root[data-theme="dark"] .dark-only { display: block; } :root[data-theme="dark"] .light-only { display: none; }
+section { padding: 90px 0 20px; }
+h2 { font-size: clamp(28px, 4vw, 40px); letter-spacing: -.02em; margin: 0 0 10px; text-align: center; }
+.sub { text-align: center; color: var(--muted); max-width: 680px; margin: 0 auto 40px; }
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 16px; }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 20px; padding: 24px; }
+.card h3 { margin: 12px 0 6px; font-size: 19px; }
+.card p { margin: 0; color: var(--muted); font-size: 15.5px; }
+.icon { width: 46px; height: 46px; border-radius: 13px; display: grid; place-items: center; background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--accent); }
+.icon svg { width: 24px; height: 24px; }
+.steps { counter-reset: s; display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; }
+.steps .card::before { counter-increment: s; content: counter(s); display: grid; place-items: center; width: 40px; height: 40px; border-radius: 50%; background: linear-gradient(135deg, var(--accent), var(--accent2)); color: #fff; font-weight: 800; }
+.band { margin-top: 30px; border-radius: 28px; padding: 46px 30px; color: #fff; text-align: center; background: linear-gradient(135deg, var(--hero1), var(--hero2)); }
+.band h2 { color: #fff; }
+.band p { color: rgba(255, 255, 255, .85); max-width: 720px; margin: 0 auto 26px; }
+.band .btn.plain { background: #fff; color: #241a66; border: 0; }
+table { width: 100%; border-collapse: collapse; background: var(--card); border: 1px solid var(--line); border-radius: 18px; overflow: hidden; font-size: 15.5px; }
+th, td { padding: 13px 16px; border-bottom: 1px solid var(--line); text-align: left; }
+th { background: var(--bg2); }
+td.y { color: #12a16f; font-weight: 700; } td.n { color: var(--muted); }
+.table-wrap { overflow-x: auto; }
+details { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 16px 20px; margin-bottom: 10px; }
+summary { cursor: pointer; font-weight: 700; font-size: 17px; }
+details p { color: var(--muted); margin: 10px 0 0; }
+footer { margin-top: 90px; padding: 36px 0 50px; border-top: 1px solid var(--line); color: var(--muted); font-size: 14.5px; }
+footer .wrap { display: flex; gap: 18px; flex-wrap: wrap; justify-content: space-between; }
+@media (max-width: 720px) {
+  nav a.link { display: none; }
+  .shots .phone { width: 30%; bottom: -24px; border-width: 4px; border-radius: 18px; }
+  header { padding-top: 48px; }
+}
+</style>
+</head>
+<body>
+<nav>
+  <div class="wrap">
+    <a class="brand" href="#"><img src="logo.png" alt="" width="34" height="34">Mirra</a>
+    <a class="link" href="#features">Features</a>
+    <a class="link" href="#how">How it works</a>
+    <a class="link" href="#faq">FAQ</a>
+    <a class="link" href="https://github.com/SamaOmmy/mirra">GitHub</a>
+    <button class="theme" id="theme" aria-label="Switch light or dark">◐</button>
+  </div>
+</nav>
+
+<header>
+  <div class="wrap">
+    <span class="badge">Free &amp; open source · Windows + Android</span>
+    <h1>Your PC on your phone.<br><span>Your phone on your PC.</span></h1>
+    <p class="lead">Mirra mirrors and controls your Android phone from your Windows PC, smooth up to 60 frames a second.
+      It also shows your PC on your phone, sends files both ways and brings your phone's notifications to your PC.
+      Private by design: no cloud, no ads, no account with us.</p>
+    <div class="ctas">
+      <a class="btn primary" href="https://github.com/SamaOmmy/mirra/releases/latest/download/Mirra-for-Windows-Setup.exe">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 5.5 10 4.5v7H3zM11 4.4l10-1.4v8.5H11zM3 12.5h7v7L3 18.5zM11 12.5h10V21l-10-1.4z"/></svg>
+        Download for Windows</a>
+      <a class="btn plain" href="#how">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="6" y="2.5" width="12" height="19" rx="2.5"/><path d="M10.5 18.5h3"/></svg>
+        Get it on Android</a>
+    </div>
+    <p class="small">Windows 10 and 11 · Android 11 or newer · <a href="https://github.com/SamaOmmy/mirra/releases/latest">All downloads</a></p>
+  </div>
+  <div class="shots">
+    <img class="pc light-only" src="screenshots/pc-light.png" alt="Mirra on Windows: a connected phone, its battery and its notifications" width="1280" height="707">
+    <img class="pc dark-only" src="screenshots/pc-dark.png" alt="Mirra on Windows: the step-by-step guide, all done" width="1280" height="707" loading="lazy">
+    <img class="phone light-only" src="screenshots/android-light.png" alt="Mirra on Android, light mode" width="540" height="1170">
+    <img class="phone dark-only" src="screenshots/android-dark.png" alt="Mirra on Android, dark mode" width="540" height="1170" loading="lazy">
+  </div>
+</header>
+
+<section id="features">
+  <div class="wrap">
+    <h2>Everything between your PC and your phone</h2>
+    <p class="sub">One app on each side. Set up once in five minutes, then it just works, at home or anywhere else.</p>
+    <div class="grid">
+      <div class="card"><div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="7" y="2.5" width="10" height="19" rx="2"/><path d="M3 9l2 2-2 2M21 9l-2 2 2 2"/></svg></div>
+        <h3>Use your phone from your PC</h3><p>Your phone in its own window, sharp and smooth (up to 60 fps). The mouse is your finger, the keyboard types, Ctrl+V pastes.</p></div>
+      <div class="card"><div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="4" width="19" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg></div>
+        <h3>See your PC on your phone</h3><p>Full screen, pinch to zoom, with the PC's sound if you like. View only, by design: nothing on the PC can be clicked from the phone.</p></div>
+      <div class="card"><div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2.5H7a2 2 0 0 0-2 2v15a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-12z"/><path d="M14 2.5v5h5M12 17.5v-6M9.5 14l2.5-2.5 2.5 2.5"/></svg></div>
+        <h3>Files both ways</h3><p>Drop files on the phone window and they land in the phone's Downloads. On the phone, tap Share, then Mirra. Up to 1 GB each.</p></div>
+      <div class="card"><div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 16v-5a6 6 0 0 1 12 0v5l1.5 2h-15z"/><path d="M10 20.5a2 2 0 0 0 4 0"/></svg></div>
+        <h3>Notifications on your PC</h3><p>Messages, calendar, anything: they pop up on the PC as they arrive, with the phone's battery at a glance.</p></div>
+      <div class="card"><div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="10.5" width="16" height="10.5" rx="2"/><path d="M8 10.5V7a4 4 0 0 1 8 0v3.5"/></svg></div>
+        <h3>Private, no cloud</h3><p>Everything goes straight between your own devices over Tailscale's encrypted WireGuard network. No relay, no account with us, no tracking.</p></div>
+      <div class="card"><div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 1 0 18z" fill="currentColor"/></svg></div>
+        <h3>Light and dark</h3><p>Both apps follow your Windows and Android setting, or pick Light or Dark yourself. Pin the phone window on top while you work.</p></div>
+      <div class="card"><div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/></svg></div>
+        <h3>Updates itself</h3><p>A pop-up says when a new version is out, on the PC and on the phone. One tap, checked with SHA-256 or Android's signature.</p></div>
+      <div class="card"><div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l-6-6 6-6M15 6l6 6-6 6"/></svg></div>
+        <h3>Free and open source</h3><p>MIT license. No ads, no subscription, no limits. Read every line on GitHub.</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="how">
+  <div class="wrap">
+    <h2>Set up in five minutes</h2>
+    <p class="sub">Mirra walks you through it and ticks each step off by itself.</p>
+    <div class="steps">
+      <div class="card"><h3>Install Mirra on your PC</h3><p>Run <a href="https://github.com/SamaOmmy/mirra/releases/latest/download/Mirra-for-Windows-Setup.exe">Mirra-for-Windows-Setup.exe</a>. Mirra offers to install Tailscale (free) if you don't have it.</p></div>
+      <div class="card"><h3>Scan the code with your phone</h3><p>Install Tailscale on the phone, then point the camera at the QR code in Mirra. The phone installs Mirra and connects by itself.</p></div>
+      <div class="card"><h3>Switch it on, done</h3><p>In Mirra on the phone, switch on "This phone on your PC". Then click Open phone window on the PC.</p></div>
+    </div>
+    <div class="band">
+      <h2>Ready when you are</h2>
+      <p>Free for everyone. Windows 10 and 11, Android 11 or newer. An iPhone can watch the PC in Safari.</p>
+      <div class="ctas">
+        <a class="btn plain" href="https://github.com/SamaOmmy/mirra/releases/latest/download/Mirra-for-Windows-Setup.exe">Download for Windows</a>
+        <a class="btn plain" href="https://github.com/SamaOmmy/mirra/releases/latest/download/Mirra-for-Android-Setup.apk">Android app (APK)</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="compare">
+  <div class="wrap">
+    <h2>Why people choose Mirra</h2>
+    <p class="sub">Two directions, one setup, nothing in the middle.</p>
+    <div class="table-wrap">
+      <table>
+        <tr><th></th><th>Mirra</th><th>Typical mirroring tools</th></tr>
+        <tr><td>Phone on the PC, with mouse and keyboard</td><td class="y">Yes, up to 60 fps</td><td>Yes</td></tr>
+        <tr><td>PC on the phone</td><td class="y">Yes, with sound</td><td class="n">Usually a separate app</td></tr>
+        <tr><td>USB debugging / developer options</td><td class="y">Not needed</td><td class="n">Often needed</td></tr>
+        <tr><td>Works away from home</td><td class="y">Yes, through Tailscale</td><td class="n">Often same Wi-Fi or a cable</td></tr>
+        <tr><td>Files both ways, notifications on the PC</td><td class="y">Yes</td><td class="n">Varies</td></tr>
+        <tr><td>Your screens on someone's server</td><td class="y">Never</td><td class="n">Sometimes, for remote use</td></tr>
+        <tr><td>Price</td><td class="y">Free, open source</td><td class="n">Free to paid</td></tr>
+      </table>
+    </div>
+  </div>
+</section>
+
+<section id="faq">
+  <div class="wrap">
+    <h2>Questions</h2>
+    <p class="sub">Anything else? <a href="https://github.com/SamaOmmy/mirra/issues">Ask on GitHub</a>.</p>
+    <details><summary>Is Mirra free?</summary><p>Yes. Mirra is free and open source (MIT license), with no ads, no subscription and no account with us. It uses Tailscale's free plan for the private connection.</p></details>
+    <details><summary>How do I mirror my Android phone to my Windows PC?</summary><p>Install Mirra for Windows, install Tailscale on the PC and the phone, scan the QR code in Mirra with the phone's camera, then switch on "This phone on your PC" in the Mirra app and click Open phone window on the PC.</p></details>
+    <details><summary>Does Mirra need USB debugging or a cable?</summary><p>No. There is no developer mode, no ADB and no cable. Mirra connects over Tailscale, so it works on the same Wi-Fi and from anywhere else too.</p></details>
+    <details><summary>Does my screen go through the cloud?</summary><p>No. The picture, sound, files and notifications go straight between your own devices through Tailscale's encrypted WireGuard network. Nobody else, including the Mirra project, can see them.</p></details>
+    <details><summary>Does Mirra work with an iPhone?</summary><p>An iPhone can watch the PC in Safari. Showing and controlling a phone on the PC needs an Android phone (Android 11 or newer).</p></details>
+    <details><summary>How is Mirra different from scrcpy?</summary><p>scrcpy is a great open-source tool that needs USB debugging (ADB) and mirrors the phone to the computer. Mirra needs no developer options, works from anywhere through Tailscale, and also shows your PC on your phone, sends files both ways and brings phone notifications to the PC.</p></details>
+    <details><summary>Windows says "Windows protected your PC". Is it safe?</summary><p>Mirra is not code-signed (that costs money), so Windows warns about any new program from the internet. Click More info, then Run anyway. The source code is public, and every release file has a SHA-256 checksum.</p></details>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <span>Mirra · free and open source (MIT) · formerly Samantha Screen Mirror</span>
+    <span><a href="https://github.com/SamaOmmy/mirra">GitHub</a> · <a href="https://github.com/SamaOmmy/mirra/releases">Releases</a> · <a href="https://github.com/SamaOmmy/mirra/blob/main/SECURITY.md">Security</a> · This page has no trackers.</span>
+  </div>
+</footer>
+
+<script>
+(function () {
+  var root = document.documentElement, key = "mirra-theme";
+  try { var saved = localStorage.getItem(key); if (saved) root.setAttribute("data-theme", saved); } catch (e) {}
+  document.getElementById("theme").addEventListener("click", function () {
+    var dark = root.getAttribute("data-theme") ? root.getAttribute("data-theme") === "dark"
+      : window.matchMedia("(prefers-color-scheme: dark)").matches;
+    var next = dark ? "light" : "dark";
+    root.setAttribute("data-theme", next);
+    try { localStorage.setItem(key, next); } catch (e) {}
+  });
+})();
+</script>
+</body>
+</html>

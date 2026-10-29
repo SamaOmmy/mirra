@@ -1,0 +1,3 @@
+User-agent: *
+Allow: /
+Sitemap: https://samaommy.github.io/mirra/sitemap.xml

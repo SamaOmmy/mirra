@@ -6,7 +6,7 @@ Thanks for helping! This is a small project; keep changes focused.
 
 ```powershell
 git clone <your fork>
-cd samantha-screen-mirror
+cd mirra
 py -3 -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -e ".[dev]"
 ```

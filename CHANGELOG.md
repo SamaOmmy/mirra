@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.6.4
+
+- The project moved to **github.com/SamaOmmy/mirra**. Both apps now look for updates there (the old address
+  forwards to it).
+
 ## 0.6.3
 
 - **The phone app updates straight from GitHub**, like the PC: when a new version is published, Mirra on the phone

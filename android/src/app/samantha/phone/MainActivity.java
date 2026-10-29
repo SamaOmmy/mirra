@@ -32,7 +32,7 @@ import org.json.JSONObject;
  */
 public class MainActivity extends Activity {
     static final String SETUP_URL =
-            "https://github.com/SamaOmmy/samantha-screen-mirror/releases/latest/download/Mirra-for-Android-Setup.apk";
+            "https://github.com/" + Updater.REPO + "/releases/latest/download/" + Updater.SETUP_FILE;
     private final Handler main = new Handler(Looper.getMainLooper());
     private Prefs prefs;
     private LinearLayout root;

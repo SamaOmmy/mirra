@@ -32,7 +32,7 @@ import java.util.zip.ZipFile;
 final class Updater {
     private Updater() {}
 
-    static final String REPO = "SamaOmmy/samantha-screen-mirror";
+    static final String REPO = "SamaOmmy/mirra";
     static final String LATEST = "https://api.github.com/repos/" + REPO + "/releases/latest";
     static final String DOWNLOAD = "https://github.com/" + REPO + "/releases/download/";
     static final String SETUP_FILE = "Mirra-for-Android-Setup.apk";   // the release file (packaging/build-release.ps1)

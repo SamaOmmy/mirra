@@ -21,7 +21,7 @@ from pathlib import Path
 
 from . import __version__, autostart, config, proc
 
-REPO = "SamaOmmy/samantha-screen-mirror"
+REPO = "SamaOmmy/mirra"
 API_LATEST = f"https://api.github.com/repos/{REPO}/releases/latest"
 DOWNLOAD_PREFIX = f"https://github.com/{REPO}/releases/download/"
 ZIP_NAME = "Mirra-for-Windows.zip"
@@ -60,7 +60,7 @@ def is_newer(latest: str, current: str) -> bool:
 # -- GitHub ----------------------------------------------------------------------------------
 def _get(url: str, timeout: int = 10, limit: int = 2_000_000) -> bytes:
     request = urllib.request.Request(url, headers={
-        "User-Agent": f"samantha-screen-mirror/{__version__}", "Accept": "application/vnd.github+json"})
+        "User-Agent": f"mirra/{__version__}", "Accept": "application/vnd.github+json"})
     try:
         with urllib.request.urlopen(request, timeout=timeout) as resp:
             data = resp.read(limit + 1)
@@ -180,7 +180,7 @@ def _download(url: str, dest: Path) -> None:
     done, total, last_error = 0, 0, None
     dest.write_bytes(b"")
     for attempt in range(DOWNLOAD_TRIES):
-        headers = {"User-Agent": f"samantha-screen-mirror/{__version__}"}
+        headers = {"User-Agent": f"mirra/{__version__}"}
         if done:
             headers["Range"] = f"bytes={done}-"
         try:

@@ -30,16 +30,33 @@ import java.io.OutputStream;
  */
 public class SetupActivity extends Activity {
     static final String SAMANTHA = "app.samantha.phone";
-    private static final int BG = 0xff0b0d12, CARD = 0xff141721, LINE = 0xff262b3a, TEXT = 0xfff1f3f8,
-            MUTED = 0xff8e96a8, ACCENT = 0xff7c5cff, ACCENT2 = 0xff22d3ee, OK = 0xff34d399;
+    private int BG, CARD, CARD2, LINE, TEXT, MUTED, ACCENT, ACCENT2, OK, WARN;   // light or dark, like the phone
     static volatile String message = "";
     private LinearLayout root;
 
     @Override
     protected void onCreate(Bundle saved) {
         super.onCreate(saved);
+        boolean dark = (getResources().getConfiguration().uiMode & android.content.res.Configuration.UI_MODE_NIGHT_MASK)
+                == android.content.res.Configuration.UI_MODE_NIGHT_YES;
+        BG = dark ? 0xff0b0d12 : 0xfff5f6fa;
+        CARD = dark ? 0xff141721 : 0xffffffff;
+        CARD2 = dark ? 0xff1c2030 : 0xffeef0f7;
+        LINE = dark ? 0xff262b3a : 0xffdde1eb;
+        TEXT = dark ? 0xfff1f3f8 : 0xff151926;
+        MUTED = dark ? 0xff8e96a8 : 0xff5c6477;
+        ACCENT = dark ? 0xff7c5cff : 0xff6a4cf5;
+        ACCENT2 = dark ? 0xff22d3ee : 0xff0b8ea6;
+        OK = dark ? 0xff34d399 : 0xff0f9b6c;
+        WARN = dark ? 0xfffbbf24 : 0xffb4690e;
+        getWindow().getDecorView().setBackgroundColor(BG);
         getWindow().setStatusBarColor(BG);
         getWindow().setNavigationBarColor(BG);
+        int light = android.view.WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS
+                | android.view.WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS;
+        if (getWindow().getInsetsController() != null) {
+            getWindow().getInsetsController().setSystemBarsAppearance(dark ? 0 : light, light);
+        }
     }
 
     @Override
@@ -73,7 +90,7 @@ public class SetupActivity extends Activity {
                 ? new GradientDrawable(GradientDrawable.Orientation.TL_BR, new int[]{ACCENT, ACCENT2})
                 : new GradientDrawable();
         if (!primary) {
-            bg.setColor(0xff1c2030);
+            bg.setColor(CARD2);
             bg.setStroke(dp(1), LINE);
         }
         bg.setCornerRadius(dp(16));
@@ -163,7 +180,7 @@ public class SetupActivity extends Activity {
                     new Intent(Intent.ACTION_DELETE, Uri.parse("package:" + SAMANTHA)))));
             c.addView(text("Then this screen offers to install it.", 13, MUTED, false));
         }
-        if (!message.isEmpty()) c.addView(text(message, 14, 0xfffbbf24, false));
+        if (!message.isEmpty()) c.addView(text(message, 14, WARN, false));
         root.addView(c);
 
         ScrollView scroll = new ScrollView(this);

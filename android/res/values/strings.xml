@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Mirra</string>
-    <string name="service_description">Lets Mirra on your PC show this phone and tap, swipe and type on it. It only works for the PC you paired, only while Mirra on the PC is showing this phone, and you can pause it in the Mirra app.</string>
+    <string name="service_description">Lets Mirra on your PC show this phone and tap, swipe and type on it. It only works for the PC you paired, only while Mirra on the PC is showing this phone, and you can pause it in the Mirra app. It can also show the notifications of this phone on that PC (a switch in the Mirra app).</string>
 </resources>

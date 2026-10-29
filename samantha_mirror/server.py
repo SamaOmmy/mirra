@@ -340,7 +340,17 @@ def create_app(cfg: Config, sound: AudioSource | None = None, phone: PhoneHub | 
 
     @app.get("/api/phone/commands")
     def phone_commands():
+        phone.battery(request.args.get("battery", type=int), request.args.get("charging") == "1")
         return jsonify(phone.next_commands())
+
+    @app.post("/api/phone/notify")
+    def phone_notify():
+        """A notification on the phone (when its owner allows it): the Mirra window shows it."""
+        try:
+            phone.notify(request.get_json(silent=True))
+        except BadInput as exc:
+            return jsonify(error=str(exc)), 400
+        return jsonify(ok=True)
 
     @app.post("/api/phone/frame")
     def phone_frame():

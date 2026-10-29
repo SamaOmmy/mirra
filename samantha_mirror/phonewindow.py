@@ -31,7 +31,7 @@ QUALITY = {   # name: (long side in pixels, 0 = the phone's own; bits per second
     "720p": 1280, "1080p": 1920, "Full": 0,
 }
 BITRATES = {"Standard": 5_000_000, "High": 10_000_000, "Maximum": 20_000_000}
-DEFAULTS = {"size": "1080p", "fps": 60, "bitrate": "High"}
+DEFAULTS = {"size": "1080p", "fps": 60, "bitrate": "High", "on_top": False}
 
 
 def load_prefs() -> dict:
@@ -277,7 +277,8 @@ class PhoneWindow:
         self.prefs = load_prefs()
         root = app.root
         self.win = win = tk.Toplevel(root)
-        win.title(f"Mirra - {device}" if device else "Mirra - your phone")
+        self.device, self.battery = device or "your phone", ""
+        win.title(f"Mirra - {self.device}")
         win.configure(bg="#000000")
         icon = Path(__file__).resolve().parent / "assets" / "mirra.ico"
         if icon.exists():
@@ -301,10 +302,12 @@ class PhoneWindow:
                    ("\uE995", "Volume up", lambda: self.key("volup")), ("\uE993", "Volume down", lambda: self.key("voldown")),
                    ("\uE898", "Send a file to the phone  (or drop files here)", self.pick_files),
                    ("\uE722", "Save a screenshot on this PC", self.screenshot),
+                   ("\uE718", "Keep on top of other windows", self.toggle_on_top),
                    ("\uE712", "More", self.more_menu)]
         self.tips = tk.Label(win, bg="#1c2030", fg="#f1f3f8", font=("Segoe UI", 9), padx=8, pady=3)
+        self.buttons = {}
         for glyph, tip, action in buttons:
-            b = tk.Label(bar, text=glyph if glyphs else tip[0], font=(glyphs, 15) if glyphs else ("Segoe UI", 12, "bold"),
+            b = self.buttons[glyph] = tk.Label(bar, text=glyph if glyphs else tip[0], font=(glyphs, 15) if glyphs else ("Segoe UI", 12, "bold"),
                          fg="#c9cdd6", bg="#0b0d12", cursor="hand2", pady=10)
             b.pack(fill="x", pady=1)
             b.bind("<Button-1>", lambda e, a=action: a())
@@ -342,6 +345,8 @@ class PhoneWindow:
         self.link = PhoneLink(host, local.cfg.port + 1, local.cfg.token)
         self.link.start()
         accept_files(win, self.send_files)   # files dropped from Explorer go to the phone
+        if self.prefs.get("on_top"):
+            self.toggle_on_top(save=False)
         self._sent_quality = False
         self.canvas.focus_set()
         self._tick()
@@ -370,7 +375,8 @@ class PhoneWindow:
         self.win.geometry(f"{w}x{h}")
 
     def _hover(self, widget, tip, on):
-        widget.config(fg="#ffffff" if on else "#c9cdd6", bg="#1c2030" if on else "#0b0d12")
+        pinned = widget is self.buttons.get("") and bool(self.win.attributes("-topmost"))
+        widget.config(fg="#ffffff" if on else ("#8f74ff" if pinned else "#c9cdd6"), bg="#1c2030" if on else "#0b0d12")
         if on:
             self.tips.config(text=tip)
             self.tips.place(relx=1.0, x=-self.TOOLBAR - 6, y=widget.winfo_y() + 8, anchor="ne")
@@ -517,6 +523,23 @@ class PhoneWindow:
         return "break"
 
     # -- tools -----------------------------------------------------------------------------------
+    def set_battery(self, battery):
+        """The phone's battery in the title bar (from the Mirra window's status)."""
+        text = (f"  -  {battery['level']}%" + (" charging" if battery["charging"] else "")) if battery else ""
+        if text != self.battery:
+            self.battery = text
+            self.win.title(f"Mirra - {self.device}{text}")
+
+    def toggle_on_top(self, save=True):
+        """Pins the phone window above other windows (or unpins it); the pin glyph turns purple while pinned."""
+        on = not bool(self.win.attributes("-topmost")) if save else True
+        self.win.attributes("-topmost", on)
+        self.buttons["\uE718"].config(fg="#8f74ff" if on else "#c9cdd6")
+        if save:
+            self.prefs["on_top"] = on
+            save_prefs(self.prefs)
+            self._say("Stays on top of other windows" if on else "No longer on top")
+
     def _say(self, text: str, seconds: float = 2.5):
         self.tips.config(text=text)
         self.tips.place(relx=0.5, rely=0.96, anchor="s")

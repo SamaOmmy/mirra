@@ -26,6 +26,9 @@ final class Prefs {
     boolean upright() { return p.getBoolean("upright", false); }
     /** Share this screen as smooth video (screen recording) rather than a few screenshots a second. */
     boolean video() { return p.getBoolean("video", true); }
+    /** May the PC show this phone's notifications? */
+    boolean notifications() { return p.getBoolean("notifications", true); }
+    void setNotifications(boolean on) { p.edit().putBoolean("notifications", on).apply(); }
     /** Video quality the PC asked for: the long side in pixels (0 = the full screen), bits per second, frames. */
     int maxSize() { return p.getInt("max_size", 1920); }
     int bitrate() { return p.getInt("bitrate", 8_000_000); }
@@ -47,6 +50,9 @@ final class Prefs {
     void setControl(boolean on) { p.edit().putBoolean("control", on).apply(); }
     void setPaused(boolean on) { p.edit().putBoolean("paused", on).apply(); }
     void setSound(boolean on) { p.edit().putBoolean("sound", on).apply(); }
+    /** "system", "light" or "dark" (Appearance in the app). */
+    String theme() { return p.getString("theme", "system"); }
+    void setTheme(String theme) { p.edit().putString("theme", theme).apply(); }
     void setLowData(boolean on) { p.edit().putBoolean("low_data", on).apply(); }
     void setUpright(boolean on) { p.edit().putBoolean("upright", on).apply(); }
     void setVideo(boolean on) { p.edit().putBoolean("video", on).apply(); }

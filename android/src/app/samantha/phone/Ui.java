@@ -1,13 +1,17 @@
 package app.samantha.phone;
 
+import android.app.Activity;
 import android.content.Context;
 import android.content.res.ColorStateList;
+import android.content.res.Configuration;
 import android.graphics.Typeface;
 import android.graphics.drawable.Drawable;
 import android.graphics.drawable.GradientDrawable;
 import android.graphics.drawable.RippleDrawable;
 import android.view.Gravity;
 import android.view.View;
+import android.view.Window;
+import android.view.WindowInsetsController;
 import android.widget.Button;
 import android.widget.CompoundButton;
 import android.widget.ImageView;
@@ -19,17 +23,56 @@ import android.widget.TextView;
 final class Ui {
     private Ui() {}
 
-    static final int BG = 0xff0b0d12;
-    static final int SURFACE = 0xff141721;
-    static final int SURFACE2 = 0xff1c2030;
-    static final int LINE = 0xff262b3a;
-    static final int TEXT = 0xfff1f3f8;
-    static final int MUTED = 0xff8e96a8;
-    static final int ACCENT = 0xff7c5cff;
-    static final int ACCENT2 = 0xff22d3ee;
-    static final int OK = 0xff34d399;
-    static final int WARN = 0xfffbbf24;
-    static final int BAD = 0xfff87171;
+    // The palette of the current look (light or dark), set by theme() before a screen is built.
+    static int BG, SURFACE, SURFACE2, LINE, TEXT, MUTED, ACCENT, ACCENT2, OK, WARN, BAD, RIPPLE, TRACK_OFF, THUMB_OFF;
+    static boolean dark;
+
+    static {
+        palette(true);
+    }
+
+    /** Light or dark: the choice under Appearance in Mirra, else the phone's own setting. Call before building views. */
+    static void theme(Activity a) {
+        String choice = new Prefs(a).theme();
+        boolean night = (a.getResources().getConfiguration().uiMode & Configuration.UI_MODE_NIGHT_MASK)
+                == Configuration.UI_MODE_NIGHT_YES;
+        palette(choice.equals("dark") || (!choice.equals("light") && night));
+        Window w = a.getWindow();
+        w.getDecorView().setBackgroundColor(BG);
+        w.setStatusBarColor(BG);
+        w.setNavigationBarColor(BG);
+        int light = WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS | WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS;
+        WindowInsetsController bars = w.getInsetsController();
+        if (bars != null) bars.setSystemBarsAppearance(dark ? 0 : light, light);
+    }
+
+    /** The dark look whatever the setting (the full-screen PC view, which is dark like a video player). */
+    static void forceDark() {
+        palette(true);
+    }
+
+    private static void palette(boolean night) {
+        dark = night;
+        BG = night ? 0xff0b0d12 : 0xfff5f6fa;
+        SURFACE = night ? 0xff141721 : 0xffffffff;
+        SURFACE2 = night ? 0xff1c2030 : 0xffeef0f7;
+        LINE = night ? 0xff262b3a : 0xffdde1eb;
+        TEXT = night ? 0xfff1f3f8 : 0xff151926;
+        MUTED = night ? 0xff8e96a8 : 0xff5c6477;
+        ACCENT = night ? 0xff7c5cff : 0xff6a4cf5;
+        ACCENT2 = night ? 0xff22d3ee : 0xff0b8ea6;
+        OK = night ? 0xff34d399 : 0xff0f9b6c;
+        WARN = night ? 0xfffbbf24 : 0xffb4690e;
+        BAD = night ? 0xfff87171 : 0xffd92d2d;
+        RIPPLE = night ? 0x33ffffff : 0x1f000000;
+        TRACK_OFF = night ? 0xff3a3f4b : 0xffc9cdd8;
+        THUMB_OFF = night ? 0xffc9cdd6 : 0xffffffff;
+    }
+
+    /** Pop-ups in the same look. */
+    static int dialog() {
+        return dark ? android.R.style.Theme_DeviceDefault_Dialog_Alert : android.R.style.Theme_DeviceDefault_Light_Dialog_Alert;
+    }
 
     static int dp(Context c, float value) {
         return Math.round(value * c.getResources().getDisplayMetrics().density);
@@ -51,7 +94,7 @@ final class Ui {
 
     /** A pressed state that ripples. */
     static Drawable ripple(Drawable content, Drawable mask) {
-        return new RippleDrawable(ColorStateList.valueOf(0x33ffffff), content, mask);
+        return new RippleDrawable(ColorStateList.valueOf(RIPPLE), content, mask);
     }
 
     static TextView text(Context c, String s, float sp, int color, boolean bold) {
@@ -143,8 +186,8 @@ final class Ui {
         Switch sw = new Switch(c);
         sw.setChecked(on);
         int[][] states = {{android.R.attr.state_checked}, {}};
-        sw.setThumbTintList(new ColorStateList(states, new int[]{0xffffffff, 0xffc9cdd6}));
-        sw.setTrackTintList(new ColorStateList(states, new int[]{ACCENT, 0xff3a3f4b}));
+        sw.setThumbTintList(new ColorStateList(states, new int[]{0xffffffff, THUMB_OFF}));
+        sw.setTrackTintList(new ColorStateList(states, new int[]{ACCENT, TRACK_OFF}));
         sw.setOnCheckedChangeListener(listener);
         return sw;
     }

@@ -16,6 +16,7 @@ KEYS = {"back", "home", "recents", "notifications", "quicksettings", "wake", "lo
 MAX_TEXT = 500
 MAX_POINTS = 200
 MAX_GESTURE_MS = 10_000
+MAX_NOTIFICATIONS = 30      # the phone's newest notifications the Mirra window can show
 
 
 class BadInput(ValueError):
@@ -83,6 +84,9 @@ class PhoneHub:
         self._commands: deque = deque(maxlen=MAX_QUEUE)
         self._watchers = 0
         self._token = 0               # changes when a newer phone request replaces an older one
+        self._notifications: deque = deque(maxlen=MAX_NOTIFICATIONS)
+        self._notified = 0
+        self._battery: dict = {}
 
     # -- the phone ----------------------------------------------------------------------------
     def hello(self, info: dict) -> None:
@@ -116,6 +120,24 @@ class PhoneHub:
             self._commands.clear()
             self._seen = time.monotonic()
             return commands
+
+    def battery(self, level, charging) -> None:
+        """The phone's battery, sent with every command request (level 0-100, or None when it can't tell)."""
+        with self._cond:
+            if type(level) is int and 0 <= level <= 100:
+                self._battery = {"level": level, "charging": bool(charging)}
+
+    def notify(self, data) -> None:
+        """A notification on the phone, for the Mirra window to show. Raises BadInput for anything malformed."""
+        if not isinstance(data, dict):
+            raise BadInput("expected a JSON object")
+        app, title, text = (data.get(k, "") for k in ("app", "title", "text"))
+        if not all(isinstance(v, str) for v in (app, title, text)) or not (title or text):
+            raise BadInput("a notification is app, title and text (strings)")
+        with self._cond:
+            self._notified += 1
+            self._notifications.appendleft({"id": self._notified, "app": app[:60], "title": title[:120],
+                                            "text": text[:400], "at": time.time()})
 
     # -- the page -----------------------------------------------------------------------------
     def add_watcher(self) -> None:
@@ -178,4 +200,6 @@ class PhoneHub:
                 "width": self._size[0], "height": self._size[1],
                 "seq": self._seq,
                 "frame_age": round(now - self._frame_at, 1) if self._frame_at else None,
+                "battery": dict(self._battery) if self._connected() and self._battery else None,
+                "notifications": list(self._notifications),
             }

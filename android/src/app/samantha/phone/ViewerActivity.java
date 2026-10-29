@@ -60,6 +60,7 @@ public class ViewerActivity extends Activity implements ScreenView.Listener, Sou
 
     @Override
     protected void onCreate(Bundle saved) {
+        Ui.forceDark();
         super.onCreate(saved);
         prefs = new Prefs(this);
         if (!prefs.paired()) {

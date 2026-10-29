@@ -315,3 +315,30 @@ def test_the_join_page_and_the_setup_download_need_no_token(cfg, monkeypatch, tm
         assert b"intent://" not in _call(port, "GET", f"/join?c={code}")[1]   # no live code: no link
     finally:
         srv.close()
+
+
+# -- notifications and battery ------------------------------------------------------------------
+def test_the_phones_notifications_reach_the_mirra_window(cfg):
+    hub = PhoneHub()
+    client = create_app(cfg, phone=hub).test_client()
+    r = client.post("/api/phone/notify", json={"app": "Messages", "title": "Mum", "text": "x" * 1000}, headers=BEARER)
+    assert r.status_code == 200
+    client.post("/api/phone/notify", json={"app": "Mail", "title": "", "text": "Invoice"}, headers=BEARER)
+    notes = client.get("/api/phone/state", headers=BEARER).get_json()["notifications"]
+    assert [(n["app"], n["title"]) for n in notes] == [("Mail", ""), ("Messages", "Mum")]   # newest first
+    assert len(notes[1]["text"]) == 400 and notes[0]["id"] > notes[1]["id"]
+    for bad in ({"app": "A", "title": "", "text": ""}, {"app": 1, "title": "x", "text": "y"}, ["no"]):
+        assert client.post("/api/phone/notify", json=bad, headers=BEARER).status_code == 400
+    assert client.post("/api/phone/notify", json={"app": "A", "title": "t", "text": ""}).status_code == 401
+
+
+def test_the_battery_comes_with_the_phones_command_request(cfg):
+    hub = PhoneHub()
+    client = create_app(cfg, phone=hub).test_client()
+    assert client.get("/api/phone/state", headers=BEARER).get_json()["battery"] is None
+    hub.hello({"device": "Pixel"})
+    hub.next_commands(timeout=0)
+    hub.battery(81, True)
+    assert client.get("/api/phone/state", headers=BEARER).get_json()["battery"] == {"level": 81, "charging": True}
+    hub.battery(500, False)   # nonsense is ignored
+    assert hub.state()["battery"]["level"] == 81

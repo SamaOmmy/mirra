@@ -63,10 +63,9 @@ public class MainActivity extends Activity {
     protected void onCreate(Bundle saved) {
         super.onCreate(saved);
         prefs = new Prefs(this);
-        getWindow().setStatusBarColor(Ui.BG);
-        getWindow().setNavigationBarColor(Ui.BG);
+        Ui.theme(this);
         build();
-        handleLink(getIntent());
+        if (saved == null) handleLink(getIntent());   // not again when the screen is rebuilt (rotation, look)
     }
 
     @Override
@@ -78,6 +77,7 @@ public class MainActivity extends Activity {
     @Override
     protected void onResume() {
         super.onResume();
+        Ui.theme(this);   // the PC view darkens the palette for itself
         visible = true;
         main.post(tick);
         int generation = ++checks;
@@ -143,7 +143,7 @@ public class MainActivity extends Activity {
         e.setSingleLine();
         e.setInputType(type);
         e.setTextColor(Ui.TEXT);
-        e.setHintTextColor(0xff5d6475);
+        e.setHintTextColor(Ui.MUTED);
         e.setTextSize(17);
         e.setBackground(Ui.round(this, Ui.BG, 14, Ui.LINE));
         e.setPadding(Ui.dp(this, 16), Ui.dp(this, 14), Ui.dp(this, 16), Ui.dp(this, 14));
@@ -420,6 +420,8 @@ public class MainActivity extends Activity {
                 })));
         accessOn.addView(Ui.settingRow(this, R.drawable.ic_video, "Smooth video", "Up to 60 pictures a second. Off: a few screenshots a second.",
                 Ui.toggle(this, prefs.video(), (b, on) -> prefs.setVideo(on))));
+        accessOn.addView(Ui.settingRow(this, R.drawable.ic_bell, "Notifications on the PC", "Show this phone's notifications in Mirra on the PC.",
+                Ui.toggle(this, prefs.notifications(), (b, on) -> prefs.setNotifications(on))));
         accessOn.addView(Ui.settingRow(this, R.drawable.ic_pause, "Pause", "The PC can't see or use this phone.",
                 Ui.toggle(this, prefs.paused(), (b, on) -> {
                     prefs.setPaused(on);
@@ -430,9 +432,25 @@ public class MainActivity extends Activity {
         phone.addView(accessOn);
         root.addView(phone);
 
+        String[] looks = {"System", "Light", "Dark"};
+        int look = java.util.Arrays.asList("system", "light", "dark").indexOf(prefs.theme());
+        LinearLayout appearance = Ui.card(this);
+        LinearLayout lookRow = Ui.settingRow(this, R.drawable.ic_theme, "Appearance",
+                looks[Math.max(0, look)] + (look <= 0 ? ": follows this phone's setting." : "."), null);
+        lookRow.setOnClickListener(v -> new AlertDialog.Builder(this, Ui.dialog())
+                .setTitle("Appearance")
+                .setSingleChoiceItems(looks, Math.max(0, look), (d, which) -> {
+                    d.dismiss();
+                    prefs.setTheme(looks[which].toLowerCase());
+                    recreate();
+                })
+                .show());
+        appearance.addView(lookRow);
+        root.addView(appearance);
+
         LinearLayout about = Ui.card(this);
         about.addView(Ui.settingRow(this, R.drawable.ic_logout, "Connected to " + prefs.pcLabel(), prefs.server(), null));
-        about.addView(Ui.button(this, "Forget this PC", false, v -> new AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
+        about.addView(Ui.button(this, "Forget this PC", false, v -> new AlertDialog.Builder(this, Ui.dialog())
                 .setTitle("Forget " + prefs.pcLabel() + "?")
                 .setMessage("This phone stops seeing the PC, and the PC stops seeing this phone. You can connect again with a new code.")
                 .setPositiveButton("Forget", (d, w) -> {
@@ -508,7 +526,7 @@ public class MainActivity extends Activity {
         String version = fromGitHub ? gitHub : pc;
         if (updating || !Updater.newer(this, version) || offered.equals(version)) return;
         offered = version;
-        new AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
+        new AlertDialog.Builder(this, Ui.dialog())
                 .setTitle("Update available")
                 .setMessage("Mirra " + version + " is ready (you have " + Updater.installedVersion(this) + "). "
                         + "It downloads in a few seconds.")

@@ -8,6 +8,7 @@ Tk is single-threaded: anything slow (the network, PowerShell, Tailscale) runs o
 result back through `App.later()`, which the window runs on its own thread.
 """
 import ctypes
+import json
 import os
 import queue
 import shutil
@@ -34,9 +35,16 @@ PROJECT_URL = f"https://github.com/{updater.REPO}"
 LOCK_NAME = r"Local\MirraWindow"
 ASSETS = Path(__file__).resolve().parent / "assets"
 
-BG, SIDE, CARD, CARD2, LINE = "#0b0d12", "#0e1118", "#141721", "#1c2030", "#262b3a"
-TEXT, MUTED, ACCENT, ACCENT_HI, CYAN = "#f1f3f8", "#8e96a8", "#7c5cff", "#8f74ff", "#22d3ee"
-OK, WARN, BAD = "#34d399", "#fbbf24", "#f87171"
+# Every color is (light mode, dark mode); CustomTkinter picks one by the appearance (Settings > Appearance).
+BG, SIDE = ("#f5f6fa", "#0b0d12"), ("#eceef5", "#0e1118")
+CARD, CARD2, LINE = ("#ffffff", "#141721"), ("#eef0f7", "#1c2030"), ("#dde1eb", "#262b3a")
+TEXT, MUTED = ("#151926", "#f1f3f8"), ("#5c6477", "#8e96a8")
+ACCENT, ACCENT_HI, CYAN = ("#6a4cf5", "#7c5cff"), ("#7a5ff7", "#8f74ff"), ("#0b8ea6", "#22d3ee")
+OK, WARN, BAD = ("#0f9b6c", "#34d399"), ("#b4690e", "#fbbf24"), ("#d92d2d", "#f87171")
+HOVER, DANGER_BG, DANGER_HOVER = ("#e3e6f0", "#262b3e"), ("#fde8e8", "#3a1d22"), ("#fbd5d5", "#4a242b")
+HERO = ("#4b32d6", "#241a66")
+SWITCH_OFF, KNOB, KNOB_HOVER = ("#c9cdd8", "#3a3f4b"), ("#3d4252", "#ffffff"), ("#2a2e3a", "#e8e8f0")
+THEMES = {"System": "system", "Light": "light", "Dark": "dark"}
 FONT = "Segoe UI"
 # Windows' own icon font (Windows 11, else Windows 10)
 ICONS = {"home": "", "phone": "", "settings": "", "check": "", "sound": "",
@@ -61,8 +69,8 @@ def label(parent, text="", size=13, color=TEXT, weight="normal", wrap=0, **kw):
 
 
 def button(parent, text, command, kind="primary", width=0, height=40):
-    styles = {"primary": (ACCENT, ACCENT_HI, "#ffffff", 0), "plain": (CARD2, "#262b3e", TEXT, 1),
-              "danger": ("#3a1d22", "#4a242b", BAD, 0), "ghost": ("transparent", CARD2, TEXT, 0)}
+    styles = {"primary": (ACCENT, ACCENT_HI, "#ffffff", 0), "plain": (CARD2, HOVER, TEXT, 1),
+              "danger": (DANGER_BG, DANGER_HOVER, BAD, 0), "ghost": ("transparent", CARD2, TEXT, 0)}
     fg, hover, color, border = styles[kind]
     return ctk.CTkButton(parent, text=text, command=command, fg_color=fg, hover_color=hover, text_color=color,
                          border_width=border, border_color=LINE, corner_radius=12, height=height,
@@ -81,8 +89,8 @@ def card(parent, title=None, subtitle=None):
 
 
 def switch(parent, command, text=""):
-    return ctk.CTkSwitch(parent, text=text, command=command, progress_color=ACCENT, button_color="#ffffff",
-                         button_hover_color="#e8e8f0", fg_color="#3a3f4b", font=font(13), text_color=TEXT)
+    return ctk.CTkSwitch(parent, text=text, command=command, progress_color=ACCENT, button_color=KNOB,
+                         button_hover_color=KNOB_HOVER, fg_color=SWITCH_OFF, font=font(13), text_color=TEXT)
 
 
 def qr_image(text: str, size: int) -> ctk.CTkImage:
@@ -91,6 +99,28 @@ def qr_image(text: str, size: int) -> ctk.CTkImage:
     qr.make(fit=True)
     img = qr.make_image(fill_color="#0b0d12", back_color="white").get_image().convert("RGB")
     return ctk.CTkImage(light_image=img, dark_image=img, size=(size, size))
+
+
+def load_window_prefs() -> dict:
+    """The window's own preferences: "theme" (System, Light or Dark) and "popups" (phone notifications pop up)."""
+    try:
+        prefs = json.loads((config.data_dir() / "window.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        prefs = {}
+    prefs = prefs if isinstance(prefs, dict) else {}
+    return {"theme": prefs.get("theme") if prefs.get("theme") in THEMES else "System",
+            "popups": prefs.get("popups") is not False}
+
+
+def save_window_prefs(prefs: dict) -> None:
+    try:
+        (config.data_dir() / "window.json").write_text(json.dumps(prefs), encoding="utf-8")
+    except OSError:
+        pass
+
+
+def load_theme() -> str:
+    return load_window_prefs()["theme"]
 
 
 def put(widget, **options) -> None:
@@ -160,7 +190,8 @@ class App:
         self.busy = ""             # what a long action is doing right now ("" when idle)
         self.phone_window = None
         self.icons = icon_font(root)
-        self.received_seen: int | None = None   # the newest file from the phone already announced
+        self.seen: dict = {}       # the newest file / notification from the phone already announced, by kind
+        self.prefs = load_window_prefs()
 
         root.title(TITLE)
         root.configure(fg_color=BG)
@@ -256,25 +287,40 @@ class App:
             pass
         with self._snap_lock:
             snap = dict(self.snap)
-        self._announce_files(snap)
+        self._announce(snap)
         if self.current:
             self.pages[self.current].refresh(snap)
         if not self.closing:
             self.root.after(200, self._pump)
 
-    def _announce_files(self, snap: dict) -> None:
-        """A small notice when the phone has sent files (not for the ones that came before the window opened)."""
-        received = (snap.get("phone") or {}).get("received")
-        if received is None:
-            return
-        newest = received[0]["id"] if received else 0
-        if self.received_seen is None or newest < self.received_seen:   # first look, or the service restarted
-            self.received_seen = newest
-            return
-        new = [f for f in received if f["id"] > self.received_seen]
-        self.received_seen = newest
-        if new:
-            FileNotice(self, new)
+    def _new(self, snap: dict, key: str) -> list:
+        """Items of the phone's list `key` that arrived since the last look (none on the first look, so what came
+        before the window opened is not announced again)."""
+        items = (snap.get("phone") or {}).get(key)
+        if items is None:
+            return []
+        newest, seen = (items[0]["id"] if items else 0), self.seen.get(key)
+        self.seen[key] = newest
+        if seen is None or newest < seen:   # first look, or the service restarted
+            return []
+        return [i for i in items if i["id"] > seen]
+
+    def _announce(self, snap: dict) -> None:
+        """Small notices for files the phone sent and for notifications on the phone."""
+        files = self._new(snap, "received")
+        if files:
+            Notice(self, "FROM YOUR PHONE", "Your phone sent " + (files[0]["name"] if len(files) == 1 else
+                                                                  f"{len(files)} files"),
+                   "Saved in Downloads\\Mirra", ("Open folder", self.open_received))
+        notes = self._new(snap, "notifications")
+        if notes and self.prefs.get("popups", True):
+            n = notes[0]
+            more = f"  (+{len(notes) - 1} more)" if len(notes) > 1 else ""
+            Notice(self, (n["app"] or "Your phone").upper() + more, n["title"] or n["text"],
+                   n["text"] if n["title"] else "", ("Open phone", self.open_phone), seconds=7)
+        win = self.phone_window
+        if win is not None and win.winfo_exists():
+            win.set_battery((snap.get("phone") or {}).get("battery"))
 
     def send_files(self, paths) -> None:
         """Sends files to the phone (they land in its Downloads folder), saying how it went in a pop-up if it fails."""
@@ -502,32 +548,47 @@ class UpdateDialog:
 
 
 # -- pages -----------------------------------------------------------------------------------------
-class FileNotice:
-    """Bottom right, for a few seconds: "Your phone sent photo.jpg", with a button to open the folder."""
+class Notice:
+    """Bottom right, for a few seconds, without taking the focus: a file from the phone, or a notification on it.
+    A newer notice replaces the one showing."""
+    current = None
 
-    def __init__(self, app: App, files: list):
+    def __init__(self, app: App, kicker: str, title: str, text: str, action: tuple | None = None, seconds: int = 9):
+        if Notice.current is not None:
+            Notice.current.close()
+        Notice.current = self
         win = self.win = ctk.CTkToplevel(app.root)
+        win.title("Mirra notice")
         win.overrideredirect(True)
         win.attributes("-topmost", True)
         win.configure(fg_color=CARD)
         body = ctk.CTkFrame(win, fg_color=CARD, corner_radius=0, border_width=1, border_color=LINE)
         body.pack(fill="both", expand=True)
+        stripe = ctk.CTkFrame(body, fg_color=ACCENT, width=4, corner_radius=0)
+        stripe.pack(side="left", fill="y")
         inner = ctk.CTkFrame(body, fg_color="transparent")
         inner.pack(fill="both", expand=True, padx=18, pady=14)
-        names = files[0]["name"] if len(files) == 1 else f"{len(files)} files"
-        label(inner, "Your phone sent " + names, 14, weight="bold", wrap=300).pack(anchor="w")
-        label(inner, "Saved in Downloads\\Mirra", 12, MUTED).pack(anchor="w", pady=(2, 10))
+        label(inner, kicker, 11, CYAN, weight="bold").pack(anchor="w")
+        label(inner, title, 14, weight="bold", wrap=320).pack(anchor="w", pady=(2, 0))
+        if text:
+            label(inner, text if len(text) <= 160 else text[:157] + "...", 13, MUTED, wrap=320).pack(anchor="w", pady=(2, 0))
         row = ctk.CTkFrame(inner, fg_color="transparent")
-        row.pack(anchor="w")
-        button(row, "Open folder", lambda: (app.open_received(), self.close()), width=120, height=34).pack(side="left")
-        button(row, "OK", self.close, "ghost", width=60, height=34).pack(side="left", padx=6)
+        row.pack(anchor="w", pady=(10, 0))
+        if action:
+            name, do = action
+            button(row, name, lambda: (do(), self.close()), width=120, height=34).pack(side="left", padx=(0, 6))
+        button(row, "OK", self.close, "ghost", width=60, height=34).pack(side="left")
         win.update_idletasks()
-        w, h = max(340, win.winfo_reqwidth()), win.winfo_reqheight()
-        x, y = win.winfo_screenwidth() - w - 24, win.winfo_screenheight() - h - 72
-        win.geometry(f"{w}x{h}+{x}+{y}")
-        win.after(9000, self.close)
+        # Tk measures in real pixels; CustomTkinter's geometry() scales what it is given, so hand it unscaled sizes
+        scale = ctk.ScalingTracker.get_window_scaling(win)
+        w, h = max(360, win.winfo_reqwidth() / scale), win.winfo_reqheight() / scale
+        x, y = win.winfo_screenwidth() / scale - w - 24, win.winfo_screenheight() / scale - h - 72
+        win.geometry(f"{int(w)}x{int(h)}+{int(x)}+{int(y)}")
+        win.after(seconds * 1000, self.close)
 
     def close(self):
+        if Notice.current is self:
+            Notice.current = None
         try:
             self.win.destroy()
         except tk.TclError:
@@ -730,7 +791,7 @@ class HomePage(Page):
             put(row, fg_color=CARD2 if current else "transparent")
             put(badge, text="✓" if done else str(i + 1),
                             fg_color=OK if done else (ACCENT if current else CARD2),
-                            text_color="#0b0d12" if done else ("#ffffff" if current else MUTED))
+                            text_color=("#ffffff", "#0b0d12") if done else ("#ffffff" if current else MUTED))
             put(title, text_color=TEXT if (current or done) else MUTED)
         if self.shown != n:
             for p in self.panels:
@@ -932,7 +993,7 @@ class PhonePage(Page):
     def build(self):
         from .phonewindow import BITRATES, QUALITY, load_prefs
         self.prefs = load_prefs()
-        hero = ctk.CTkFrame(self.content, fg_color="#241a66", corner_radius=20)
+        hero = ctk.CTkFrame(self.content, fg_color=HERO, corner_radius=20)
         hero.pack(fill="x", padx=32, pady=(0, 16))
         inner = ctk.CTkFrame(hero, fg_color="transparent")
         inner.pack(fill="x", padx=26, pady=24)
@@ -941,9 +1002,30 @@ class PhonePage(Page):
         self.device_sub = label(inner, "", 13, "#d6d9f5", wrap=620)
         self.device_sub.pack(anchor="w", pady=(2, 14))
         self.open_btn = ctk.CTkButton(inner, text="Open phone window", command=self.app.open_phone, fg_color="#ffffff",
-                                      hover_color="#e9e6ff", text_color="#241a66", corner_radius=14, height=48,
+                                      hover_color="#e9e6ff", text_color=HERO, corner_radius=14, height=48,
                                       width=220, font=font(15, "bold"))
         self.open_btn.pack(anchor="w")
+
+        box = self.section("Notifications", "Your phone's notifications, here on the PC. The phone app decides "
+                           "(\"Notifications on the PC\", on by default).")
+        self.popups = switch(box, self.set_popups, "Pop up on this PC when one arrives")
+        if self.app.prefs.get("popups", True):
+            self.popups.select()
+        self.popups.pack(anchor="w", pady=(12, 4))
+        self.note_rows = []
+        notes_box = ctk.CTkFrame(box, fg_color="transparent")
+        notes_box.pack(fill="x")
+        for _ in range(5):
+            row = ctk.CTkFrame(notes_box, fg_color="transparent")
+            app_name = label(row, "", 12, CYAN, weight="bold", width=130)
+            app_name.pack(side="left", anchor="n")
+            what = label(row, "", 13, TEXT, wrap=470)
+            what.pack(side="left", fill="x", expand=True)
+            when = label(row, "", 12, MUTED, width=70)
+            when.pack(side="right", anchor="n")
+            self.note_rows.append((row, app_name, what, when))
+        self.notes_empty = label(box, "None yet.", 13, MUTED)
+        self.notes_empty.pack(anchor="w", pady=(6, 0))
 
         box = self.section("Files", "Send photos, documents, anything, between this PC and your phone.")
         row = ctk.CTkFrame(box, fg_color="transparent")
@@ -973,6 +1055,10 @@ class PhonePage(Page):
             label(row, what, 13, TEXT).pack(side="left")
         label(box, "The phone shares its screen only while the phone window is open, and shows a notification then.",
               12, MUTED, wrap=640).pack(anchor="w", pady=(10, 0))
+
+    def set_popups(self):
+        self.app.prefs["popups"] = bool(self.popups.get())
+        save_window_prefs(self.app.prefs)
 
     def pick_files(self):
         from tkinter import filedialog
@@ -1011,15 +1097,30 @@ class PhonePage(Page):
         elif not note or time.monotonic() - at > 20:
             note = ("Last from the phone: " + ", ".join(f["name"] for f in received[:3])) if received else ""
         put(self.files_note, text=note)
+        notes = phone.get("notifications") or []
+        for i, (row, app_name, what, when) in enumerate(self.note_rows):
+            if i < len(notes):
+                n = notes[i]
+                put(app_name, text=n["app"] or "Phone")
+                put(what, text=" - ".join(x for x in (n["title"], n["text"]) if x)[:200])
+                put(when, text=ago(n["at"]))
+                if not row.winfo_ismapped():
+                    row.pack(fill="x", pady=4)
+            elif row.winfo_ismapped():
+                row.pack_forget()
+        if bool(notes) == bool(self.notes_empty.winfo_ismapped()):
+            (self.notes_empty.pack_forget() if notes else self.notes_empty.pack(anchor="w", pady=(6, 0)))
         if not server:
             put(self.device, text="Mirra is not running")
             put(self.device_sub, text="Turn it on under Home.")
             put(self.open_btn, state="disabled")
         elif phone.get("connected"):
-            put(self.device, text=phone.get("device") or "Your phone")
-            put(self.device_sub, text="Connected. The window opens at the phone's own shape; you can resize it."
-                                      if phone.get("control", True) else
-                                      "Connected, view only: the phone does not allow tapping (its own switch).")
+            battery = phone.get("battery")
+            power = (f"   Battery {battery['level']}%" + (", charging" if battery["charging"] else "")) if battery else ""
+            put(self.device, text=(phone.get("device") or "Your phone"))
+            put(self.device_sub, text=("Connected." + power + "\nThe window opens at the phone's own shape; you can "
+                                       "resize it.") if phone.get("control", True) else
+                                      ("Connected, view only: the phone does not allow tapping (its own switch)." + power))
             put(self.open_btn, state="normal")
         else:
             put(self.device, text="No phone connected")
@@ -1032,6 +1133,14 @@ class SettingsPage(Page):
     title = "Settings"
 
     def build(self):
+        box = self.section("Appearance", "Light or dark. System follows Windows (Settings > Personalization > Colors).")
+        theme = ctk.CTkSegmentedButton(box, values=list(THEMES), command=self.set_theme, selected_color=ACCENT,
+                                       selected_hover_color=ACCENT_HI, unselected_color=CARD2,
+                                       unselected_hover_color=LINE, fg_color=CARD2, text_color=TEXT,
+                                       font=font(13, "bold"), corner_radius=10, height=36)
+        theme.set(load_theme())
+        theme.pack(anchor="w", pady=(12, 0))
+
         box = self.section("Sound", "Each phone switches sound on in its own app; the PC records nothing while no "
                            "phone listens.")
         self.sound = switch(box, self.set_sound, "Let phones hear this PC's sound")
@@ -1076,6 +1185,11 @@ class SettingsPage(Page):
             (self.sound.select if audio.get("enabled") else self.sound.deselect)()
         put(self.sound, state="normal" if server and not self.app.busy else "disabled")
         put(self.version, text=f"   You have Mirra {__version__}" + (f"   {self.app.busy}" if self.app.busy else ""))
+
+    def set_theme(self, theme: str):
+        self.app.prefs["theme"] = theme
+        save_window_prefs(self.app.prefs)
+        ctk.set_appearance_mode(THEMES[theme])
 
     def set_sound(self):
         config.set_env_value("SM_AUDIO", "1" if self.sound.get() else "0")
@@ -1150,7 +1264,7 @@ def main() -> int:
             ctypes.windll.shcore.SetProcessDpiAwareness(2)
         except Exception:
             pass
-    ctk.set_appearance_mode("dark")
+    ctk.set_appearance_mode(THEMES[load_theme()])
     root = ctk.CTk()
     App(root)
     root.mainloop()

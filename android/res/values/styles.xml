@@ -1,15 +1,19 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <style name="Mirra" parent="@android:style/Theme.Material.NoActionBar">
-        <item name="android:colorAccent">#8b6cff</item>
-        <item name="android:colorPrimary">#0B0D12</item>
-        <item name="android:colorPrimaryDark">#0B0D12</item>
-        <item name="android:windowBackground">#0B0D12</item>
-        <item name="android:statusBarColor">#0B0D12</item>
-        <item name="android:navigationBarColor">#0B0D12</item>
+    <!-- light; values-night has the dark look -->
+    <style name="Mirra" parent="@android:style/Theme.Material.Light.NoActionBar">
+        <item name="android:colorAccent">#6a4cf5</item>
+        <item name="android:colorPrimary">#F5F6FA</item>
+        <item name="android:colorPrimaryDark">#F5F6FA</item>
+        <item name="android:windowBackground">#F5F6FA</item>
+        <item name="android:statusBarColor">#F5F6FA</item>
+        <item name="android:navigationBarColor">#F5F6FA</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:windowLightNavigationBar">true</item>
     </style>
 
-    <style name="Mirra.Fullscreen">
+    <!-- the full-screen PC view is always dark, like a video player -->
+    <style name="Mirra.Fullscreen" parent="@android:style/Theme.Material.NoActionBar">
         <item name="android:windowBackground">#000000</item>
         <item name="android:windowFullscreen">true</item>
     </style>

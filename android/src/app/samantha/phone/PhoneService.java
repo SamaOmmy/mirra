@@ -12,6 +12,8 @@ import android.graphics.Path;
 import android.hardware.HardwareBuffer;
 import android.hardware.display.DisplayManager;
 import android.media.AudioManager;
+import android.content.pm.ApplicationInfo;
+import android.os.BatteryManager;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
@@ -57,6 +59,9 @@ public class PhoneService extends AccessibilityService {
     private static final int JPEG_QUALITY = 60;
     private static final long MIN_INTERVAL_MS = 340;  // Android allows one screenshot every 333 ms
     private static volatile long consentUntil;        // answer the "Start now?" question until then
+    private static final ExecutorService NOTIFY = Executors.newSingleThreadExecutor();
+    private String lastNotification = "";
+    private long lastNotificationAt;
 
     private final Handler main = new Handler(Looper.getMainLooper());
     private final ExecutorService shots = Executors.newSingleThreadExecutor();
@@ -128,6 +133,10 @@ public class PhoneService extends AccessibilityService {
 
     @Override
     public void onAccessibilityEvent(AccessibilityEvent event) {
+        if (event != null && event.getEventType() == AccessibilityEvent.TYPE_NOTIFICATION_STATE_CHANGED) {
+            forwardNotification(event);
+            return;
+        }
         if (SystemClock.elapsedRealtime() > consentUntil || event == null) return;
         CharSequence pkg = event.getPackageName();
         if (pkg == null || !pkg.toString().equals("com.android.systemui")) return;
@@ -143,6 +152,62 @@ public class PhoneService extends AccessibilityService {
                 return;
             }
         }
+    }
+
+    /**
+     * A notification on this phone goes to the PC (switch "Notifications on the PC"): the app's name, the title and
+     * the text. Not: Mirra's own, ongoing ones (music, downloads), group summaries, or ones marked secret.
+     */
+    private void forwardNotification(AccessibilityEvent event) {
+        if (!prefs.notifications() || !prefs.paired() || prefs.paused()) return;
+        if (!(event.getParcelableData() instanceof Notification)) return;   // a toast
+        Notification n = (Notification) event.getParcelableData();
+        String pkg = String.valueOf(event.getPackageName());
+        if (pkg.equals(getPackageName()) || n.visibility == Notification.VISIBILITY_SECRET
+                || (n.flags & (Notification.FLAG_ONGOING_EVENT | Notification.FLAG_GROUP_SUMMARY)) != 0) return;
+        CharSequence title = n.extras.getCharSequence(Notification.EXTRA_TITLE);
+        CharSequence text = n.extras.getCharSequence(Notification.EXTRA_BIG_TEXT);
+        if (text == null) text = n.extras.getCharSequence(Notification.EXTRA_TEXT);
+        String t = title == null ? "" : title.toString(), x = text == null ? "" : text.toString();
+        if (t.isEmpty() && x.isEmpty()) return;
+        String key = pkg + "|" + t + "|" + x;
+        long now = SystemClock.elapsedRealtime();
+        if (key.equals(lastNotification) && now - lastNotificationAt < 10000) return;   // the same one, updated
+        lastNotification = key;
+        lastNotificationAt = now;
+        String body;
+        try {
+            body = new JSONObject().put("app", appName(n, pkg)).put("title", t).put("text", x).toString();
+        } catch (JSONException e) {
+            return;
+        }
+        String url = prefs.server() + "/api/phone/notify", token = prefs.token();
+        NOTIFY.execute(() -> {
+            try {
+                Net.postJson(url, token, body);
+            } catch (IOException ignored) {
+                // the PC is away: the notification is still on the phone
+            }
+        });
+    }
+
+    @SuppressWarnings("deprecation")   // the typed getParcelable needs Android 13
+    private String appName(Notification n, String pkg) {
+        try {
+            Object info = n.extras.getParcelable("android.appInfo");   // set by Android on every notification
+            if (info instanceof ApplicationInfo) return ((ApplicationInfo) info).loadLabel(getPackageManager()).toString();
+        } catch (RuntimeException ignored) {
+            // fall back to the package name
+        }
+        String last = pkg.substring(pkg.lastIndexOf('.') + 1);
+        return last.isEmpty() ? pkg : Character.toUpperCase(last.charAt(0)) + last.substring(1);
+    }
+
+    /** "?battery=80&charging=1" for the command request: the PC shows the phone's battery. */
+    private String batteryQuery() {
+        BatteryManager bm = getSystemService(BatteryManager.class);
+        int level = bm == null ? -1 : bm.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY);
+        return level < 0 || level > 100 ? "" : "?battery=" + level + "&charging=" + (bm.isCharging() ? 1 : 0);
     }
 
     // -- the web link to the PC ----------------------------------------------------------------
@@ -167,7 +232,7 @@ public class PhoneService extends AccessibilityService {
                 report("Connected to " + prefs.pcLabel() + ".");
                 backoff = 2000;
                 while (running && !prefs.paused() && base.equals(prefs.server()) && token.equals(prefs.token())) {
-                    byte[] data = Net.request("GET", base + "/api/phone/commands", token, null, null, null, 45000);
+                    byte[] data = Net.request("GET", base + "/api/phone/commands" + batteryQuery(), token, null, null, null, 45000);
                     JSONArray commands = new JSONArray(new String(data));
                     for (int i = 0; i < commands.length(); i++) handle(commands.getJSONObject(i));
                 }

@@ -50,7 +50,7 @@ def test_up_to_date_means_no_update(monkeypatch):
 
 
 def test_downloads_must_come_from_the_projects_release_page(monkeypatch):
-    evil = "https://evil.example.com/SamanthaScreenMirror-windows.zip"
+    evil = "https://evil.example.com/Mirra-for-Windows.zip"
     monkeypatch.setattr(updater, "_get", lambda url, **kw: api_json(zip_url=evil))
     with pytest.raises(updater.UpdateError, match="refusing"):
         updater.latest_release()

@@ -32,7 +32,7 @@ Go to the [latest release](../../releases/latest) and download only what you nee
 | A Windows PC | **`Mirra-for-Windows-Setup.exe`** | The installer. Double-click it, click *Next*, done. |
 | An Android phone | **`Mirra-for-Android-Setup.apk`** | Easiest: don't download it yourself. Scan the QR code in Mirra on your PC and it comes from your PC. |
 | A Windows PC, no installer wanted | `Mirra-for-Windows.zip` | The same program as a folder. Unzip it somewhere permanent and open `Mirra.exe`. |
-| *(nothing to do)* | `SamanthaScreenMirror-windows.zip`, `*.sha256` | Used by older versions to update themselves. You don't need these. |
+| *(nothing to do)* | `Mirra-for-Windows.zip.sha256` | Used by Mirra to check its own updates. You don't need it. |
 
 An iPhone? There is no iPhone app, but an iPhone can watch the PC in Safari (see [iPhone](#iphone)).
 

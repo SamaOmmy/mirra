@@ -7,7 +7,6 @@
     Mirra-for-Windows-Setup.exe       the Windows installer (what most people download)
     Mirra-for-Windows.zip (+ .sha256) the same program as a zip; the updater installs from this
     Mirra-for-Android-Setup.apk       for Android phones: installs the Mirra app
-    SamanthaScreenMirror-windows.zip (+ .sha256)   the same zip under its old name, so versions before 0.6 can update
   Upload them to the GitHub release (for example: gh release create v0.6.0 release\* --notes-file notes.md).
   Needs the project's .venv with PyInstaller, a JDK 17+, the Android SDK and Inno Setup 6. The key never leaves this PC.
 #>
@@ -53,9 +52,6 @@ function Zip-With-Sum($folder, $name) {
   "$hash  $name" | Set-Content -Encoding ascii "$out\$name.sha256"
 }
 Zip-With-Sum $dist "Mirra-for-Windows.zip"
-# versions before 0.6 look for this name, with the files in a "SamanthaScreenMirror" folder
-Copy-Item -Recurse $dist "$work\SamanthaScreenMirror"
-Zip-With-Sum "$work\SamanthaScreenMirror" "SamanthaScreenMirror-windows.zip"
 
 & $iscc "/DVersion=$version" "/DDist=$dist" "/DOut=$out" "packaging\mirra.iss" | Out-Null
 if ($LASTEXITCODE -ne 0) { throw "Inno Setup failed" }

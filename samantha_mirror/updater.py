@@ -26,7 +26,6 @@ API_LATEST = f"https://api.github.com/repos/{REPO}/releases/latest"
 DOWNLOAD_PREFIX = f"https://github.com/{REPO}/releases/download/"
 ZIP_NAME = "Mirra-for-Windows.zip"
 SUM_NAME = ZIP_NAME + ".sha256"
-LEGACY_ZIP_NAME = "SamanthaScreenMirror-windows.zip"   # what versions before 0.6 download (still published)
 CHECK_EVERY = 12 * 3600   # seconds between background checks
 FIRST_CHECK_DELAY = 60    # seconds after start, so startup stays quick
 
@@ -81,8 +80,6 @@ def latest_release() -> Release:
         raise UpdateError("GitHub sent something unexpected.") from exc
     # Only ever download from this project's own release page.
     zip_url, sha_url = assets.get(ZIP_NAME), assets.get(SUM_NAME)
-    if not zip_url:
-        zip_url, sha_url = assets.get(LEGACY_ZIP_NAME), assets.get(LEGACY_ZIP_NAME + ".sha256")
     for url in (zip_url, sha_url):
         if url and not url.startswith(DOWNLOAD_PREFIX):
             raise UpdateError("Release asset is not hosted on the project's release page; refusing.")

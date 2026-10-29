@@ -17,7 +17,12 @@ built to be private by default.
   when you ask for one. A code works for 10 minutes, 5 wrong codes throw it away, and wrong codes count towards the
   same lockout as wrong tokens. Only someone who can see your PC screen (or who already has the token) can get a code.
 - **Cookie.** After the first sign-in the token is stored in an `HttpOnly`, `SameSite=Strict` cookie.
-- **View only.** There is no mouse, keyboard or file access to the PC from the phone.
+- **View only.** There is no mouse or keyboard control of the PC from the phone, and no way to read the PC's files.
+- **Files.** A paired phone can send files to the PC (Share > Mirra). They are only ever written into
+  `Downloads\Mirra`, under a cleaned-up name (no folders, no reserved names) that never replaces an existing file,
+  and they are never opened or run. One file is at most 1 GB, and a file that would leave less than 500 MB free on
+  the disk is refused. Files from the PC to the phone are only the ones you pick in the Mirra window; each waits
+  under a random name until the phone fetches it, and is deleted then (or after an hour).
 - **Sound is opt-in.** Whoever has the token can ask the PC for its sound, like the screen, but nothing is recorded
   until someone does, and `SM_AUDIO=0` removes the feature.
 - **Phone on the PC (Android).** The phone app connects **out** to your PC with your token and listens for nothing,

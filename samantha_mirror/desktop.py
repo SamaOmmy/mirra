@@ -23,7 +23,7 @@ import customtkinter as ctk
 import qrcode
 from PIL import Image
 
-from . import __version__, autostart, config, proc, shortcuts, tailscale, updater
+from . import __version__, autostart, config, proc, shortcuts, tailscale, transfer, updater
 from .client import Local, Offline, Refused
 
 APP = "Mirra"
@@ -138,6 +138,9 @@ HELP = [
      "In Mirra on the phone, \"This phone on your PC\" must be on and not paused. Banking apps and password screens "
      "always show black (Android hides them)."),
     ("It is not smooth", "Under My phone, choose 720p and 30 fps. On Wi-Fi at home it can go higher."),
+    ("Where do sent files go?",
+     "From the phone (Share > Mirra): Downloads\\Mirra on this PC. To the phone (drop files on the phone window): "
+     "Downloads on the phone. Sending to the phone needs \"This phone on your PC\" on in the phone app."),
     ("A phone was lost", "Settings > Phones > Sign out all phones. Every phone then needs to scan the code again."),
 ]
 
@@ -157,6 +160,7 @@ class App:
         self.busy = ""             # what a long action is doing right now ("" when idle)
         self.phone_window = None
         self.icons = icon_font(root)
+        self.received_seen: int | None = None   # the newest file from the phone already announced
 
         root.title(TITLE)
         root.configure(fg_color=BG)
@@ -250,12 +254,52 @@ class App:
                 fn(*args)
         except queue.Empty:
             pass
+        with self._snap_lock:
+            snap = dict(self.snap)
+        self._announce_files(snap)
         if self.current:
-            with self._snap_lock:
-                snap = dict(self.snap)
             self.pages[self.current].refresh(snap)
         if not self.closing:
             self.root.after(200, self._pump)
+
+    def _announce_files(self, snap: dict) -> None:
+        """A small notice when the phone has sent files (not for the ones that came before the window opened)."""
+        received = (snap.get("phone") or {}).get("received")
+        if received is None:
+            return
+        newest = received[0]["id"] if received else 0
+        if self.received_seen is None or newest < self.received_seen:   # first look, or the service restarted
+            self.received_seen = newest
+            return
+        new = [f for f in received if f["id"] > self.received_seen]
+        self.received_seen = newest
+        if new:
+            FileNotice(self, new)
+
+    def send_files(self, paths) -> None:
+        """Sends files to the phone (they land in its Downloads folder), saying how it went in a pop-up if it fails."""
+        files = [Path(p) for p in paths if Path(p).is_file()]
+        if not files or not self.local:
+            return
+        self.busy = f"Sending {files[0].name}..." if len(files) == 1 else f"Sending {len(files)} files..."
+
+        def work():
+            for file in files:
+                self.local.send_file(file)
+
+        def done(_result, error):
+            self.busy = ""
+            if error is not None:
+                UpdateDialog.message(self, "Not sent", f"The phone did not get the file: {error}")
+            else:
+                self.sent_note = ("Sent. It is in Downloads on the phone." if len(files) == 1 else
+                                  f"Sent {len(files)} files. They are in Downloads on the phone.", time.monotonic())
+        self.background(work, done)
+
+    def open_received(self) -> None:
+        folder = transfer.downloads_folder()
+        folder.mkdir(parents=True, exist_ok=True)
+        os.startfile(folder)
 
     def _open_client(self) -> None:
         try:
@@ -458,6 +502,38 @@ class UpdateDialog:
 
 
 # -- pages -----------------------------------------------------------------------------------------
+class FileNotice:
+    """Bottom right, for a few seconds: "Your phone sent photo.jpg", with a button to open the folder."""
+
+    def __init__(self, app: App, files: list):
+        win = self.win = ctk.CTkToplevel(app.root)
+        win.overrideredirect(True)
+        win.attributes("-topmost", True)
+        win.configure(fg_color=CARD)
+        body = ctk.CTkFrame(win, fg_color=CARD, corner_radius=0, border_width=1, border_color=LINE)
+        body.pack(fill="both", expand=True)
+        inner = ctk.CTkFrame(body, fg_color="transparent")
+        inner.pack(fill="both", expand=True, padx=18, pady=14)
+        names = files[0]["name"] if len(files) == 1 else f"{len(files)} files"
+        label(inner, "Your phone sent " + names, 14, weight="bold", wrap=300).pack(anchor="w")
+        label(inner, "Saved in Downloads\\Mirra", 12, MUTED).pack(anchor="w", pady=(2, 10))
+        row = ctk.CTkFrame(inner, fg_color="transparent")
+        row.pack(anchor="w")
+        button(row, "Open folder", lambda: (app.open_received(), self.close()), width=120, height=34).pack(side="left")
+        button(row, "OK", self.close, "ghost", width=60, height=34).pack(side="left", padx=6)
+        win.update_idletasks()
+        w, h = max(340, win.winfo_reqwidth()), win.winfo_reqheight()
+        x, y = win.winfo_screenwidth() - w - 24, win.winfo_screenheight() - h - 72
+        win.geometry(f"{w}x{h}+{x}+{y}")
+        win.after(9000, self.close)
+
+    def close(self):
+        try:
+            self.win.destroy()
+        except tk.TclError:
+            pass
+
+
 class Page:
     title = ""
     scrolls = True
@@ -869,6 +945,18 @@ class PhonePage(Page):
                                       width=220, font=font(15, "bold"))
         self.open_btn.pack(anchor="w")
 
+        box = self.section("Files", "Send photos, documents, anything, between this PC and your phone.")
+        row = ctk.CTkFrame(box, fg_color="transparent")
+        row.pack(anchor="w", pady=(12, 0))
+        self.send_btn = button(row, "Send files to the phone", self.pick_files, width=200)
+        self.send_btn.pack(side="left", padx=(0, 8))
+        button(row, "Open files from the phone", self.app.open_received, "plain", width=210).pack(side="left")
+        self.files_note = label(box, "", 13, MUTED, wrap=640)
+        self.files_note.pack(anchor="w", pady=(10, 0))
+        label(box, "On the phone: in any app tap Share, then Mirra. Files arrive in Downloads\\Mirra on this PC. "
+              "Files you send land in Downloads on the phone. You can also drop files on the phone window.",
+              12, MUTED, wrap=640).pack(anchor="w", pady=(6, 0))
+
         box = self.section("Picture", "Sharper and smoother needs a faster connection. On mobile data choose 720p.")
         self._choice(box, "Sharpness", list(QUALITY), self.prefs["size"], "size")
         self._choice(box, "Smoothness", ["30 fps", "60 fps"], f"{self.prefs['fps']} fps", "fps")
@@ -885,6 +973,12 @@ class PhonePage(Page):
             label(row, what, 13, TEXT).pack(side="left")
         label(box, "The phone shares its screen only while the phone window is open, and shows a notification then.",
               12, MUTED, wrap=640).pack(anchor="w", pady=(10, 0))
+
+    def pick_files(self):
+        from tkinter import filedialog
+        paths = filedialog.askopenfilenames(parent=self.app.root, title="Send to the phone")
+        if paths:
+            self.app.send_files(list(paths))
 
     def _choice(self, parent, name, values, current, key):
         row = ctk.CTkFrame(parent, fg_color="transparent")
@@ -909,6 +1003,14 @@ class PhonePage(Page):
     def refresh(self, snap):
         phone = snap.get("phone") or {}
         server = snap.get("server")
+        put(self.send_btn, state="normal" if phone.get("connected") and not self.app.busy else "disabled")
+        note, at = getattr(self.app, "sent_note", ("", 0))
+        received = phone.get("received") or []
+        if self.app.busy.startswith("Sending"):
+            note = self.app.busy
+        elif not note or time.monotonic() - at > 20:
+            note = ("Last from the phone: " + ", ".join(f["name"] for f in received[:3])) if received else ""
+        put(self.files_note, text=note)
         if not server:
             put(self.device, text="Mirra is not running")
             put(self.device_sub, text="Turn it on under Home.")

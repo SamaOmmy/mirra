@@ -231,6 +231,10 @@ public class PhoneService extends AccessibilityService {
             setWatching(c.optBoolean("on") && !prefs.paused());
             return;
         }
+        if (type.equals("file")) {   // a file from the PC (it does not need the tap-and-type switch)
+            Transfer.receive(this, prefs, c);
+            return;
+        }
         live(c);
     }
 

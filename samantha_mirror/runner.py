@@ -23,6 +23,7 @@ from .auth import Auth
 from .phonelink import PhoneHub
 from .server import create_app
 from .streamrelay import Relay
+from .transfer import Inbox, Outbox
 
 TAILSCALE_POLL = 10        # seconds between looks for the Tailscale address while it is not up
 TAILSCALE_LOG_EVERY = 300  # how often to repeat the "waiting for Tailscale" log line
@@ -120,13 +121,14 @@ def serve_forever(cfg: config.Config) -> int:
     deadline = time.monotonic() + BIND_RETRY_SECONDS
     announced = False
     # Shared by the web app and the live link (relay), and kept when the listener is rebuilt.
-    auth, hub = Auth(cfg.token), PhoneHub()
+    auth, hub, inbox, outbox = Auth(cfg.token), PhoneHub(), Inbox(), Outbox()
     while True:
         ip = _wait_for_tailscale()  # re-read each round: the address can change
         listen = f"{ip}:{cfg.port}" + (f" 127.0.0.1:{cfg.port}" if cfg.loopback else "")
         try:
             # send_bytes=1 so each JPEG frame is flushed immediately instead of buffered.
-            server = create_server(create_app(cfg, phone=hub, auth=auth), listen=listen, threads=2 * cfg.max_clients + 4,
+            app = create_app(cfg, phone=hub, auth=auth, inbox=inbox, outbox=outbox)
+            server = create_server(app, listen=listen, threads=2 * cfg.max_clients + 4,
                                    send_bytes=1, ident="samantha-mirror", **PROXY_TRUST)
         except OSError as exc:
             if address_not_ready(exc) and time.monotonic() < deadline:

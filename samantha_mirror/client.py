@@ -2,6 +2,8 @@
 import json
 import urllib.error
 import urllib.request
+from pathlib import Path
+from urllib.parse import quote
 
 from . import config, tailscale
 
@@ -66,6 +68,28 @@ class Local:
 
     def stream(self, path: str, timeout: float = 10):
         return self._open("GET", path, timeout=timeout)
+
+    def send_file(self, file: Path) -> dict:
+        """Sends a file to the phone (server.py: /api/phone/send), streamed, not read into memory."""
+        try:
+            base = self.base()
+        except tailscale.BindError as exc:
+            raise Offline(str(exc))
+        with open(file, "rb") as body:
+            request = urllib.request.Request(base + "/api/phone/send", data=body, method="POST", headers={
+                "Authorization": f"Bearer {self.cfg.token}", "Content-Type": "application/octet-stream",
+                "Content-Length": str(file.stat().st_size), "X-File-Name": quote(file.name)})
+            try:
+                with urllib.request.urlopen(request, timeout=120) as resp:
+                    return json.loads(resp.read() or b"{}")
+            except urllib.error.HTTPError as exc:
+                try:
+                    message = json.loads(exc.read() or b"{}").get("error", "")
+                except ValueError:
+                    message = ""
+                raise Refused(exc.code, message or f"The server answered {exc.code}.")
+            except OSError as exc:
+                raise Offline(str(exc))
 
 
 def jpeg_frames(resp):

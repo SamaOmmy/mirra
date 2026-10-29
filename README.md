@@ -16,6 +16,8 @@ Mirra is two apps that work together: **Mirra for Windows** on your PC and **Mir
 - **See your PC on your phone**, live and full screen, with its sound if you want it. Pinch to zoom, take screenshots.
 - **See and use your phone on your PC**, in its own phone-shaped window, smooth (up to 60 pictures a second) and
   sharp. Your mouse is your finger, your keyboard types on the phone.
+- **Send files both ways**: drop files on the phone window (they land in the phone's Downloads), or tap **Share >
+  Mirra** in any app on the phone (they land in `Downloads\Mirra` on the PC).
 - **Private**: everything goes straight between your own devices through [Tailscale](https://tailscale.com), a free
   private network. Nobody else, including this project, can see anything.
 
@@ -80,6 +82,15 @@ Switch on **Play the PC's sound** to hear the PC.
 
 The toolbar beside it has Back, Home, Recent apps, Notifications, volume, lock, **save a screenshot on the PC**
 (into *Pictures\Mirra*) and picture quality (720p / 1080p / Full, 30 / 60 fps, Standard / High / Maximum).
+
+**Files, both ways:**
+
+| From | Do this | It lands in |
+|---|---|---|
+| PC to phone | Drop files on the phone window, or click its **Send a file** button (or *My phone > Send files to the phone*) | *Downloads* on the phone (a notification opens it) |
+| Phone to PC | In any app tap **Share**, then **Mirra**. Or in Mirra on the phone tap **Send files to the PC** | `Downloads\Mirra` on the PC (Mirra shows a notice with *Open folder*) |
+
+Up to 1 GB per file. Sending to the phone needs *This phone on your PC* switched on in the phone app.
 
 The first time each session the phone asks Android to record its screen, and Mirra answers *Start now* for you, so
 nobody has to tap it. While the PC looks, the phone shows a notification. If recording is not possible, Mirra falls
@@ -196,6 +207,7 @@ samantha_mirror/   the PC side (Python; the package kept its old name)
   server.py        the web API both apps use            streamrelay.py  the live phone link (port + 1)
   capture.py       PC screen -> JPEG                    audio.py        speaker loopback -> PCM
   phonelink.py     phone commands relay                 pairing.py, joinpage.py  pairing by QR code
+  transfer.py      files both ways                      dropfiles.py    files dropped on a window
   runner.py        background service                   updater.py      updates
 android/           Mirra for Android (plain Java, built by android/build.py without Gradle)
 android/setup/     Mirra Setup (installs the app so Android does not restrict it)

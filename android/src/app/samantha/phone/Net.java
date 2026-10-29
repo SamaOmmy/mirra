@@ -107,7 +107,7 @@ final class Net {
         }
     }
 
-    private static HttpURLConnection open(String method, String url, String token, int readTimeoutMs) throws IOException {
+    static HttpURLConnection open(String method, String url, String token, int readTimeoutMs) throws IOException {
         HttpURLConnection c = (HttpURLConnection) new URL(url).openConnection();
         c.setRequestMethod(method);
         c.setConnectTimeout(8000);
@@ -117,7 +117,7 @@ final class Net {
         return c;
     }
 
-    private static void check(HttpURLConnection c) throws IOException {
+    static void check(HttpURLConnection c) throws IOException {
         int code = c.getResponseCode();
         if (code < 400) return;
         InputStream err = c.getErrorStream();

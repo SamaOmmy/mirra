@@ -142,6 +142,18 @@ class PhoneHub:
             self._command(event)
             return True
 
+    def send_file(self, item: dict) -> bool:
+        """Tell the phone a file is waiting for it (see transfer.Outbox). False when no phone is connected."""
+        with self._cond:
+            if not self._connected():
+                return False
+            self._command({"t": "file", "id": item["id"], "name": item["name"], "size": item["size"]})
+            return True
+
+    def connected(self) -> bool:
+        with self._cond:
+            return self._connected()
+
     def wait_frame(self, last_seq: int, timeout: float = 1.0):
         """(seq, jpeg) when there is a newer screenshot, else None."""
         with self._cond:

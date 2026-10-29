@@ -24,6 +24,7 @@ import cv2  # noqa: E402
 import numpy as np  # noqa: E402
 
 from . import config, gestures  # noqa: E402
+from .dropfiles import accept_files  # noqa: E402
 from .streamrelay import frame, read_frame, read_line  # noqa: E402
 
 QUALITY = {   # name: (long side in pixels, 0 = the phone's own; bits per second)
@@ -298,6 +299,7 @@ class PhoneWindow:
                    ("\uE80F", "Home  (middle click)", lambda: self.key("home")),
                    ("\uE7C4", "Recent apps", lambda: self.key("recents")),
                    ("\uE995", "Volume up", lambda: self.key("volup")), ("\uE993", "Volume down", lambda: self.key("voldown")),
+                   ("\uE898", "Send a file to the phone  (or drop files here)", self.pick_files),
                    ("\uE722", "Save a screenshot on this PC", self.screenshot),
                    ("\uE712", "More", self.more_menu)]
         self.tips = tk.Label(win, bg="#1c2030", fg="#f1f3f8", font=("Segoe UI", 9), padx=8, pady=3)
@@ -339,6 +341,7 @@ class PhoneWindow:
         host = "127.0.0.1" if local.cfg.loopback else local.base().split("//", 1)[1].rsplit(":", 1)[0]
         self.link = PhoneLink(host, local.cfg.port + 1, local.cfg.token)
         self.link.start()
+        accept_files(win, self.send_files)   # files dropped from Explorer go to the phone
         self._sent_quality = False
         self.canvas.focus_set()
         self._tick()
@@ -514,6 +517,41 @@ class PhoneWindow:
         return "break"
 
     # -- tools -----------------------------------------------------------------------------------
+    def _say(self, text: str, seconds: float = 2.5):
+        self.tips.config(text=text)
+        self.tips.place(relx=0.5, rely=0.96, anchor="s")
+        if getattr(self, "_say_job", None):
+            self.win.after_cancel(self._say_job)
+        self._say_job = self.win.after(int(seconds * 1000), self.tips.place_forget)
+
+    def pick_files(self):
+        from tkinter import filedialog
+        paths = filedialog.askopenfilenames(parent=self.win, title="Send to the phone")
+        if paths:
+            self.send_files(list(paths))
+
+    def send_files(self, paths):
+        """Sends files to the phone, one after the other; they land in its Downloads folder."""
+        files = [Path(p) for p in paths if Path(p).is_file()]
+        if not files:
+            self._say("Only files can be sent, not folders.")
+            return
+        self._say(f"Sending {files[0].name}..." if len(files) == 1 else f"Sending {len(files)} files...", 600)
+
+        def work():
+            for file in files:
+                self.local.send_file(file)
+
+        def done(_result, error):
+            if not self.winfo_exists():
+                return
+            if error is None:
+                self._say("Sent. It is in Downloads on the phone." if len(files) == 1 else
+                          f"Sent {len(files)} files. They are in Downloads on the phone.", 4)
+            else:
+                self._say(f"Not sent: {error}", 6)
+        self.app.background(work, done)
+
     def screenshot(self):
         picture = self.link.picture
         if picture is None:
@@ -522,9 +560,7 @@ class PhoneWindow:
         folder.mkdir(parents=True, exist_ok=True)
         path = folder / time.strftime("Phone %Y-%m-%d %H.%M.%S.png")
         cv2.imwrite(str(path), picture)
-        self.tips.config(text="Saved in Pictures\\Mirra")
-        self.tips.place(relx=0.5, rely=0.96, anchor="s")
-        self.win.after(2500, self.tips.place_forget)
+        self._say("Saved in Pictures\\Mirra")
 
     def more_menu(self):
         import tkinter as tk
@@ -535,6 +571,7 @@ class PhoneWindow:
             menu.add_command(label=text, command=lambda n=name: self.key(n))
         menu.add_separator()
         menu.add_command(label="Paste this PC's clipboard  (Ctrl+V)", command=self._paste)
+        menu.add_command(label="Send a file to the phone...", command=self.pick_files)
         menu.add_command(label="Picture quality...", command=self.quality_menu)
         x, y = self.win.winfo_pointerxy()
         menu.tk_popup(x, y)

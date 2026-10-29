@@ -33,6 +33,7 @@ import org.json.JSONObject;
 public class MainActivity extends Activity {
     static final String SETUP_URL =
             "https://github.com/" + Updater.REPO + "/releases/latest/download/" + Updater.SETUP_FILE;
+    private static final int PICK_FILES = 7;
     private final Handler main = new Handler(Looper.getMainLooper());
     private Prefs prefs;
     private LinearLayout root;
@@ -313,6 +314,22 @@ public class MainActivity extends Activity {
     }
 
     // -- paired -------------------------------------------------------------------------------------
+    @Override
+    protected void onActivityResult(int request, int result, Intent data) {
+        super.onActivityResult(request, result, data);
+        if (request != PICK_FILES || result != RESULT_OK || data == null) return;
+        java.util.List<Uri> uris = new java.util.ArrayList<>();
+        if (data.getClipData() != null) {
+            for (int i = 0; i < data.getClipData().getItemCount(); i++) uris.add(data.getClipData().getItemAt(i).getUri());
+        } else if (data.getData() != null) {
+            uris.add(data.getData());
+        }
+        if (Transfer.sendToPc(this, uris)) {
+            Toast.makeText(this, (uris.size() == 1 ? "Sending to " : "Sending " + uris.size() + " files to ")
+                    + prefs.pcLabel() + "...", Toast.LENGTH_SHORT).show();
+        }
+    }
+
     private void buildPaired() {
         LinearLayout hero = Ui.hero(this);
         LinearLayout top = Ui.row(this);
@@ -338,6 +355,16 @@ public class MainActivity extends Activity {
         show.setMinHeight(Ui.dp(this, 58));
         hero.addView(show);
         root.addView(hero);
+
+        LinearLayout files = Ui.card(this);
+        files.addView(Ui.settingRow(this, R.drawable.ic_file, "Files", "Send photos and files to " + prefs.pcLabel()
+                + ". In any app you can also tap Share, then Mirra. On the PC they go to Downloads\\Mirra.", null));
+        files.addView(Ui.button(this, "Send files to the PC", false, v -> {
+            if (Build.VERSION.SDK_INT >= 33) requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS}, 1);
+            startActivityForResult(new Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE)
+                    .setType("*/*").putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true), PICK_FILES);
+        }));
+        root.addView(files);
 
         LinearLayout sound = Ui.card(this);
         sound.addView(Ui.settingRow(this, R.drawable.ic_sound, "Play the PC's sound", "Hear the PC while you watch it.",

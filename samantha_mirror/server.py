@@ -7,6 +7,7 @@ import io
 import socket
 import time
 from pathlib import Path
+from urllib.parse import quote, unquote
 
 import mss
 from flask import Flask, Response, abort, jsonify, make_response, redirect, request, send_from_directory
@@ -19,6 +20,7 @@ from .capture import FrameSource
 from .config import LIMITS, Config
 from .pairing import Pairing
 from .phonelink import MAX_FRAME, POLL_SECONDS, BadInput, PhoneHub, parse_input
+from .transfer import MAX_FILE, Inbox, Outbox, TransferError
 
 BOUNDARY = "frame"
 COOKIE_MAX_AGE = 30 * 24 * 3600
@@ -65,11 +67,13 @@ def _parse_settings(data, monitor_count):
 
 
 def create_app(cfg: Config, sound: AudioSource | None = None, phone: PhoneHub | None = None,
-               pairing: Pairing | None = None, auth: Auth | None = None) -> Flask:
+               pairing: Pairing | None = None, auth: Auth | None = None, inbox: Inbox | None = None,
+               outbox: Outbox | None = None) -> Flask:
     app = Flask(__name__, static_folder=str(WEB_DIR), static_url_path="")
     app.config["MAX_CONTENT_LENGTH"] = MAX_FRAME + 4096
     phone = phone or PhoneHub()
     pairing = pairing or Pairing()
+    inbox, outbox = inbox or Inbox(), outbox or Outbox()
     app_seen = [0.0]   # when the phone app last made a request (monotonic)
     auth = auth or Auth(cfg.token)
     sound = sound or AudioSource(enabled=cfg.audio)
@@ -293,7 +297,8 @@ def create_app(cfg: Config, sound: AudioSource | None = None, phone: PhoneHub | 
     def phone_state():
         # app_seen: seconds since the phone app last talked to this PC (paired and open), for the Mirra window's guide
         seen = round(time.monotonic() - app_seen[0]) if app_seen[0] else None
-        return jsonify(phone.state() | {"app_available": PHONE_APP.exists(), "app_seen": seen})
+        return jsonify(phone.state() | {"app_available": PHONE_APP.exists(), "app_seen": seen,
+                                        "received": inbox.recent(), "received_folder": str(inbox.folder)})
 
     # -- the QR code in the Mirra window: connect a phone with one scan --------------------------------
     @app.get("/join")
@@ -385,5 +390,55 @@ def create_app(cfg: Config, sound: AudioSource | None = None, phone: PhoneHub | 
         if not phone.send_input(event):
             return jsonify(error="The phone is not connected, or it does not allow control."), 409
         return jsonify(ok=True)
+
+    # -- files both ways (transfer.py) ---------------------------------------------------------------
+    def uploaded_file():
+        """(name, stream, size) of a file sent as the request body, its name in the X-File-Name header (URL-encoded)."""
+        request.max_content_length = MAX_FILE
+        name = unquote(request.headers.get("X-File-Name", ""))
+        return name, request.stream, request.content_length
+
+    @app.post("/api/phone/upload")
+    def phone_upload():
+        """The phone sends a file (Share > Mirra): it lands in Downloads/Mirra on this PC."""
+        try:
+            path = inbox.receive(*uploaded_file())
+        except TransferError as exc:
+            return jsonify(error=str(exc)), 400
+        return jsonify(ok=True, name=path.name, folder="Downloads\\Mirra")
+
+    @app.post("/api/phone/send")
+    def phone_send():
+        """The Mirra window sends a file to the phone: it waits here until the phone downloads it."""
+        if not phone.connected():
+            return jsonify(error="Your phone is not connected. In Mirra on the phone, switch on \"This phone on your PC\"."), 409
+        try:
+            item = outbox.add(*uploaded_file())
+        except TransferError as exc:
+            return jsonify(error=str(exc)), 400
+        if not phone.send_file(item):
+            outbox.done(item["id"])
+            return jsonify(error="Your phone is not connected. In Mirra on the phone, switch on \"This phone on your PC\"."), 409
+        return jsonify(ok=True, name=item["name"])
+
+    @app.get("/api/phone/files/<file_id>")
+    def phone_file(file_id):
+        item = outbox.get(file_id)
+        if item is None:
+            return jsonify(error="That file is no longer waiting. Send it again from the PC."), 404
+
+        def generate():
+            sent = 0
+            with open(item["path"], "rb") as f:
+                while chunk := f.read(1 << 20):
+                    sent += len(chunk)
+                    yield chunk
+            if sent == item["size"]:
+                outbox.done(file_id)   # the phone has it all
+
+        resp = Response(generate(), mimetype="application/octet-stream")
+        resp.headers["Content-Length"] = str(item["size"])
+        resp.headers["X-File-Name"] = quote(item["name"])
+        return resp
 
     return app

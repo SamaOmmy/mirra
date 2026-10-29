@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.7.0
+
+New
+- **Send files both ways.** Drop files from Explorer onto the phone window (or click its new *Send a file* button,
+  or *My phone > Send files to the phone*): they land in the phone's Downloads, and a notification opens them. On the
+  phone, tap **Share > Mirra** in any app (or *Send files to the PC* in Mirra): the files land in `Downloads\Mirra` on
+  the PC, and the Mirra window shows a notice with *Open folder*. Up to 1 GB per file, one after the other, streamed
+  (never held in memory). Received files never replace existing ones and are never opened or run.
+
 ## 0.6.4
 
 - The project moved to **github.com/SamaOmmy/mirra**. Both apps now look for updates there (the old address
